@@ -3,8 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Corretor de Campos de PDF</title>
+    <title>Editor de Posição da Ficha</title>
+    
     <script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.min.js"></script>
+    
     <style>
         body {
             font-family: 'Segoe UI', Arial, sans-serif;
@@ -13,26 +16,38 @@
             display: flex;
             flex-direction: column;
             align-items: center;
-            padding: 30px;
+            padding: 20px;
+            margin: 0;
         }
         .container {
-            max-width: 600px;
+            width: 90%;
+            max-width: 1000px;
             background: #2a2a35;
-            padding: 30px;
+            padding: 20px;
             border-radius: 12px;
             box-shadow: 0 4px 20px rgba(0,0,0,0.4);
             text-align: center;
+            margin-bottom: 20px;
         }
-        h1 { color: #ffca28; margin-top: 0; }
-        p { color: #ccc; font-size: 0.95rem; line-height: 1.5; }
+        h1 { color: #ffca28; margin-top: 0; margin-bottom: 5px; }
+        p { color: #ccc; font-size: 0.95rem; margin-bottom: 15px; }
         
-        .upload-box {
-            border: 2px dashed #ffca28;
-            padding: 20px;
-            border-radius: 8px;
-            margin: 20px 0;
+        .controls {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 15px;
+            flex-wrap: wrap;
+        }
+        
+        .upload-btn {
+            background-color: #ffca28;
+            color: #1e1e24;
+            padding: 10px 20px;
+            font-weight: bold;
+            border-radius: 6px;
             cursor: pointer;
-            background: #333344;
+            display: inline-block;
         }
         input[type="file"] { display: none; }
         
@@ -40,142 +55,358 @@
             background-color: #4caf50;
             color: white;
             border: none;
-            padding: 12px 24px;
+            padding: 10px 20px;
             font-size: 1rem;
             font-weight: bold;
             border-radius: 6px;
             cursor: pointer;
             transition: background 0.2s;
-            margin-top: 15px;
         }
         button:hover { background-color: #45a049; }
         button:disabled { background-color: #555; cursor: not-allowed; }
 
-        .status {
-            margin-top: 15px;
+        #status {
+            margin: 10px 0;
             font-weight: bold;
             color: #00bcd4;
+            font-size: 1.1rem;
+        }
+
+        /* ÁREA DO CANVAS E DOS MARCADORES ARRUSTÁVEIS */
+        #canvas-wrapper {
+            position: relative;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.6);
+            background: #fff;
+            display: inline-block;
+            margin-top: 10px;
+        }
+        canvas {
+            display: block;
+        }
+
+        /* ESTILO DOS CAMPOS QUE VOCÊ VAI ARRASTAR */
+        .marker {
+            position: absolute;
+            background: rgba(255, 202, 40, 0.35);
+            border: 2px dashed #ffca28;
+            color: #fff;
+            font-size: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: move;
+            user-select: none;
+            box-sizing: border-box;
+            font-family: monospace;
+            font-weight: bold;
+            z-index: 10;
+        }
+        .marker:hover {
+            background: rgba(255, 202, 40, 0.6);
+            border-style: solid;
+        }
+        .label-text {
+            pointer-events: none;
+            background: rgba(0,0,0,0.8);
+            padding: 1px 4px;
+            border-radius: 3px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 95%;
         }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <h1>Corretor de Posição do PDF</h1>
-    <p>Este utilitário vai processar o seu PDF editável, localizar os campos de formulário de <strong>VIDA</strong> e <strong>MANA</strong> que foram trocados por acidente, e inverter as posições físicas deles mantendo toda a formatação original do arquivo.</p>
+    <h1>Editor de Posição da Ficha</h1>
+    <p>Clique em sequência no PDF para gerar os campos. Depois, você pode arrastar qualquer um deles com o mouse para ajustar perfeitamente!</p>
     
-    <label class="upload-box" id="drop-zone">
-        <span id="upload-text">Clique aqui para selecionar ou arraste o seu PDF (H&S.pdf)</span>
-        <input type="file" id="pdf-input" accept=".pdf">
-    </label>
+    <div class="controls">
+        <label class="upload-btn">
+            Carregar PDF da Ficha
+            <input type="file" id="uploadPdf" accept=".pdf">
+        </label>
+        
+        <button id="btnDownload" disabled>Gerar e Baixar PDF Protegido</button>
+    </div>
 
-    <div class="status" id="status-message"></div>
-    
-    <button id="process-btn" disabled>Corrigir Posições e Baixar PDF</button>
+    <div id="status">Aguardando carregamento do PDF...</div>
+</div>
+
+<div id="canvas-wrapper">
+    <canvas id="pdf-canvas"></canvas>
 </div>
 
 <script>
-    const pdfInput = document.getElementById('pdf-input');
-    const uploadText = document.getElementById('upload-text');
-    const processBtn = document.getElementById('process-btn');
-    const statusMessage = document.getElementById('status-message');
+// Desestruturação da biblioteca PDF-Lib
+const { PDFDocument, PDFName, PDFString, TextAlignment } = window.PDFLib || {};
+
+let pdfOriginalBytes = null;
+const labels = [
+    "C1 (Lsta Base)", "C2 (Nível 1)", "C3 (Dado 1)", "C4 (Total 1)", 
+    "C5 (Nível 2)", "C6 (Dado 2)", "C7 (Total 2)", "C8 (Total 3)",
+    "C9 (Nível 3)", "C10 (Dado 3)", "C11 (Nível 4)", "C12 (Dado 4)",
+    "C13 (Nível 5)", "C14 (Dado 5)", "C15 (Nível 6)", "C16 (Dado 6)",
+    "C17 (Nível 7)", "C18 (Dado 7)", "C19 (Nível 8)", "C20 (Dado 8)",
+    "C21 (Nível 9)", "C22 (Dado 9)", "C23 (Nível 10)", "C24 (Dado 10)",
+    "C25 (Nível 11)", "C26 (Dado 11)", "C27 (Nível 12)", "C28 (Dado 12)",
+    "C29 (Nível 13)", "C30 (Dado 13)", "C31 (Nível 14)", "C32 (Dado 14)",
+    "C33 (Nível 15)", "C34 (Dado 15)", "C35 (Nível 16)", "C36 (Dado 16)",
+    "C37 (Texto 1)", "C38 (Texto 2)", "C39 (Texto 3)", "C40 (Texto 4)",
+    "C41 (Multi-linha 1)", "C42 (Multi-linha 2)", "C43 (Multi-linha 3)",
+    "C44 (Texto 5)", 
+    "C45 (Texto 6 Central)", "C46 (Texto 7 Central)", "C47 (Texto 8 Central)"
+];
+
+const TOTAL_FIELDS = labels.length;
+let currentStep = 0;
+const canvas = document.getElementById('pdf-canvas');
+const wrapper = document.getElementById('canvas-wrapper');
+const statusEl = document.getElementById('status');
+const btnDownload = document.getElementById('btnDownload');
+
+pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js';
+
+// CARREGAMENTO DO PDF NO CANVAS VISUAL
+document.getElementById('uploadPdf').addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    try {
+        statusEl.innerText = "Carregando visualização do PDF...";
+        const arrayBuffer = await file.arrayBuffer();
+        pdfOriginalBytes = arrayBuffer.slice(0); 
+        const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
+        const pdf = await loadingTask.promise;
+        const page = await pdf.getPage(1);
+        const viewport = page.getViewport({ scale: 1.5 });
+        const context = canvas.getContext('2d');
+        
+        canvas.height = viewport.height;
+        canvas.width = viewport.width;
+        await page.render({ canvasContext: context, viewport: viewport }).promise;
+        
+        document.querySelectorAll('.marker').forEach(m => m.remove());
+        currentStep = 0;
+        statusEl.innerText = "Clique na ficha para posicionar: " + labels[0];
+        btnDownload.disabled = true;
+    } catch (err) {
+        alert("Erro no PDF: " + err.message);
+    }
+});
+
+// CLIQUE PARA PEGAR COORDENADAS E CRIAR MARCADOR
+canvas.addEventListener('click', (e) => {
+    if (currentStep >= TOTAL_FIELDS || !pdfOriginalBytes) return;
+
+    const rect = canvas.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+
+    const marker = document.createElement('div');
+    marker.className = 'marker';
+    marker.id = `field-${currentStep}`;
     
-    let pdfBytes = null;
+    const isMultiLine = (currentStep >= 40 && currentStep <= 42);
+    const defaultW = isMultiLine ? 120 : 60;
+    const defaultH = isMultiLine ? 60 : 20;
 
-    // Detecta quando o usuário escolhe o arquivo PDF
-    pdfInput.addEventListener('change', async (e) => {
-        const file = e.target.files[0];
-        if (file) {
-            uploadText.innerText = `Arquivo carregado: ${file.name}`;
-            statusMessage.innerText = "Lendo estrutura do PDF...";
-            
-            const arrayBuffer = await file.arrayBuffer();
-            pdfBytes = new Uint8Array(arrayBuffer);
-            
-            statusMessage.innerText = "PDF pronto para correção!";
-            processBtn.disabled = false;
-        }
+    marker.style.width = defaultW + 'px';
+    marker.style.height = defaultH + 'px';
+    marker.style.left = (x - defaultW / 2) + 'px';
+    marker.style.top = (y - defaultH / 2) + 'px';
+    
+    marker.innerHTML = `<span class="label-text">${labels[currentStep]}</span>`;
+    wrapper.appendChild(marker);
+
+    makeDraggable(marker);
+
+    currentStep++;
+    if (currentStep === TOTAL_FIELDS) {
+        statusEl.innerText = "Todos os campos posicionados! Se necessário, ajuste arrastando-os e clique em baixar.";
+        btnDownload.disabled = false;
+    } else {
+        statusEl.innerText = "Posicione: " + labels[currentStep];
+    }
+});
+
+// SISTEMA COMPLETO DE ARRASTAR E SOLTAR COM O MOUSE (DRAG AND DROP)
+function makeDraggable(el) {
+    let isDragging = false;
+    let offset = { x: 0, y: 0 };
+
+    el.addEventListener('mousedown', (e) => {
+        isDragging = true;
+        offset = { x: e.clientX - el.offsetLeft, y: e.clientY - el.offsetTop };
+        e.stopPropagation();
     });
 
-    // Função principal que faz a troca dos lados dos campos editáveis
-    processBtn.addEventListener('click', async () => {
-        try {
-            statusMessage.innerText = "Processando campos de formulário...";
-            
-            // Carrega o documento PDF na biblioteca
-            const pdfDoc = await PDFLib.PDFDocument.load(pdfBytes);
-            const form = pdfDoc.getForm();
-            const fields = form.getFields();
+    document.addEventListener('mousemove', (e) => {
+        if (!isDragging) return;
+        
+        let newX = e.clientX - offset.x;
+        let newY = e.clientY - offset.y;
+        
+        // Mantém dentro dos limites do wrapper do PDF
+        if (newX < 0) newX = 0;
+        if (newY < 0) newY = 0;
+        if (newX + el.clientWidth > wrapper.clientWidth) newX = wrapper.clientWidth - el.clientWidth;
+        if (newY + el.clientHeight > wrapper.clientHeight) newY = wrapper.clientHeight - el.clientHeight;
 
-            let campoVida = null;
-            let campoMana = null;
+        el.style.left = newX + 'px';
+        el.style.top = newY + 'px';
+    });
 
-            // Busca automática pelos campos que contêm "vida" ou "mana" no nome interno
-            fields.forEach(field => {
-                const name = field.getName().toLowerCase();
-                if (name.includes('vida')) campoVida = field;
-                if (name.includes('mana')) campoMana = field;
-            });
+    document.addEventListener('mouseup', () => { isDragging = false; });
+}
 
-            // Fallback: Caso os nomes internos sejam genéricos (ex: TXT_0, TXT_1), 
-            // vamos pegar os campos de texto baseados no topo do documento.
-            if (!campoVida || !campoMana) {
-                const textFields = form.getFields().filter(f => f.constructor.name === 'PDFTextField');
-                if (textFields.length >= 2) {
-                    // Ordena pela posição para tentar achar os primeiros campos (Vida/Mana/Estamina do topo)
-                    campoVida = textFields[0]; 
-                    campoMana = textFields[2]; // Geralmente o terceiro se Estamina estiver no meio
-                }
-            }
+// SALVAMENTO E GERAÇÃO DO PDF COM INVERSÃO DE C4 E C7
+btnDownload.addEventListener('click', async () => {
+    try {
+        statusEl.innerText = "Processando e aplicando correções no PDF...";
+        const pdfDoc = await PDFDocument.load(pdfOriginalBytes.slice(0));
+        const form = pdfDoc.getForm();
+        const page = pdfDoc.getPage(0);
+        const { width, height } = page.getSize();
+        
+        const indicesEsquerda = [36, 37, 40, 41, 42, 43];
+        const dadosIndices = [2, 5, 9, 11, 13, 15, 17, 19, 21, 23, 25, 27, 29, 31, 33, 35];
+        const resultadosIndices = [3, 6, 7]; 
+        
+        const opcoesClasses = [' ', 'Tank', 'Hibrido', 'Assassino', 'Destruidor', 'Arcano', 'Mentalista', 'Vitalista', 'Invocador', 'Elementalista'];
+        const cWidth = canvas.width;
+        const cHeight = canvas.height;
 
-            if (campoVida && campoMana) {
-                // Descobre a posição e tamanho atual de cada campo no PDF
-                const widgetsVida = campoVida.acroField.getWidgets();
-                const widgetsMana = campoMana.acroField.getWidgets();
+        for (let i = 0; i < TOTAL_FIELDS; i++) {
+            const el = document.getElementById(`field-${i}`);
+            if (!el) continue;
 
-                if (widgetsVida.length > 0 && widgetsMana.length > 0) {
-                    const rectVida = widgetsVida[0].getRectangle();
-                    const rectMana = widgetsMana[0].getRectangle();
+            // --- AQUI ACONTECE A MÁGICA DA CORREÇÃO ---
+            // Se for o clique do campo C4 (Total 1), ele assume o ID matemático 'res2'.
+            // Se for o clique do campo C7 (Total 2), ele assume o ID matemático 'res'.
+            let name = (i === 3) ? 'res2' : (i === 6) ? 'res' : `c${i+1}`;
+            let f;
 
-                    // Troca as coordenadas X e Y (posição no papel) de um pelo outro
-                    widgetsVida[0].setRectangle({
-                        x: rectMana.x,
-                        y: rectMana.y,
-                        width: rectVida.width,
-                        height: rectVida.height
-                    });
-
-                    widgetsMana[0].setRectangle({
-                        x: rectVida.x,
-                        y: rectVida.y,
-                        width: rectMana.width,
-                        height: rectMana.height
-                    });
-
-                    statusMessage.innerText = "Campos invertidos com sucesso! Gerando download...";
-                }
+            if (i === 0) {
+                f = form.createDropdown(name);
+                f.addOptions(opcoesClasses);
+                f.select(' ');
             } else {
-                // Se o script não detectar por nome, faremos uma inversão direta por coordenadas presumidas
-                statusMessage.innerText = "Ajustando layout do topo da ficha...";
+                f = form.createTextField(name);
+                if (i < 36) {
+                    f.setText(dadosIndices.includes(i) ? "1d4" : "0");
+                } else if (i >= 40 && i <= 42) {
+                    f.enableMultiline();
+                }
+
+                if (dadosIndices.includes(i) || resultadosIndices.includes(i)) {
+                    f.enableReadOnly();
+                }
+
+                f.acroField.dict.set(PDFName.of('DA'), PDFString.of('/Helvetica 12 Tf 0 g'));
+                f.setFontSize(12);
+                
+                f.setAlignment(indicesEsquerda.includes(i) ? TextAlignment.Left : TextAlignment.Center);
             }
 
-            // Salva as alterações feitas no documento
-            const modifiedPdfBytes = await pdfDoc.save();
+            const elLeft = parseFloat(el.style.left);
+            const elTop = parseFloat(el.style.top);
+            const elW = el.offsetWidth;
+            const elH = el.offsetHeight;
 
-            // Cria o gatilho de download do novo arquivo PDF corrigido
-            const blob = new Blob([modifiedPdfBytes], { type: "application/pdf" });
-            const link = document.createElement('a');
-            link.href = URL.createObjectURL(blob);
-            link.download = "Ficha_Corrigida.pdf";
-            link.click();
-            
-            statusMessage.innerText = "Pronto! O PDF corrigido foi baixado.";
-
-        } catch (error) {
-            console.error(error);
-            statusMessage.innerText = "Erro ao processar o PDF. Verifique se ele é mesmo editável.";
+            f.addToPage(page, { 
+                x: (elLeft * width) / cWidth, 
+                y: height - ((elTop * height) / cHeight) - ((elH * height) / cHeight), 
+                width: (elW * width) / cWidth, 
+                height: (elH * height) / cHeight,
+                borderWidth: 0 
+            });
         }
-    });
+
+        // --- SCRIPT DO MOTOR DE CÁLCULO ---
+        const scriptMotor = [
+            'var escolha = this.getField("c1").value;',
+            'var bases = {',
+            '  "Tank": [8,2,2], "Hibrido": [4,2,4], "Assassino": [2,2,8],',
+            '  "Destruidor": [2,4,2], "Arcano": [2,4,2], "Mentalista": [2,4,2],',
+            '  "Vitalista": [2,6,2], "Invocador": [2,6,2], "Elementalista": [2,5,2]',
+            '};',
+            'var b = bases[escolha] || [0,0,0];',
+            'var valBase1 = b[0], valBase2 = b[1], valBase3 = b[2];',
+            '',
+            'function getDado(nivel) {',
+            '  nivel = Number(nivel) || 0;',
+            '  if (nivel >= 51) return "1d100"; if (nivel >= 36) return "1d50";',
+            '  if (nivel >= 26) return "1d20"; if (nivel >= 21) return "1d12";',
+            '  if (nivel >= 16) return "1d10"; if (nivel >= 11) return "1d8";',
+            '  if (nivel >= 6) return "1d6"; return "1d4";',
+            '}',
+            '',
+            'function getD(nivel) {',
+            '  return (nivel >= 51)?100:(nivel >= 36)?50:(nivel >= 26)?20:(nivel >= 21)?12:(nivel >= 16)?10:(nivel >= 11)?8:(nivel >= 6)?6:4;',
+            '}',
+            '',
+            'var n1 = Number(this.getField("c2").value) || 0;',
+            'this.getField("c3").value = getDado(n1);',
+            'this.getField("res").value = (valBase1 * n1) + getD(n1);',
+            'this.getField("c8").value = (valBase3 * n1) + getD(n1);',
+            '',
+            'var n2 = Number(this.getField("c5").value) || 0;',
+            'this.getField("c6").value = getDado(n2);',
+            'this.getField("res2").value = (valBase2 * n2) + getD(n2);',
+            '',
+            'for (var i = 9; i <= 35; i += 2) {',
+            '  var nivelField = this.getField("c" + i);',
+            '  var dadoField = this.getField("c" + (i + 1));',
+            '  if (nivelField && dadoField) { dadoField.value = getDado(nivelField.value); }',
+            '}'
+        ].join('\n');
+
+        const action = pdfDoc.context.obj({
+            Type: 'Action',
+            S: 'JavaScript',
+            JS: PDFString.of(scriptMotor)
+        });
+
+        form.acroForm.dict.set(PDFName.of('NeedAppearances'), pdfDoc.context.obj(true));
+
+        try {
+            const resField = form.getField('res');
+            resField.acroField.dict.set(PDFName.of('AA'), pdfDoc.context.obj({ C: action }));
+            form.acroForm.dict.set(PDFName.of('CO'), pdfDoc.context.obj([ resField.ref ]));
+        } catch (e) { console.warn(e); }
+
+        const triggerNames = ['c1', 'c2', 'c5', 'c9', 'c11', 'c13', 'c15', 'c17', 'c19', 'c21', 'c23', 'c25', 'c27', 'c29', 'c31', 'c33', 'c35'];
+        triggerNames.forEach(name => {
+            try {
+                const field = form.getField(name);
+                field.acroField.dict.set(PDFName.of('AA'), pdfDoc.context.obj({ K: action, V: action }));
+                const widgets = field.acroField.getWidgets();
+                if (widgets && widgets.length > 0) {
+                    const widget = widgets[0];
+                    let widgetAA = widget.dict.get(PDFName.of('AA'));
+                    if (!widgetAA) {
+                        widgetAA = pdfDoc.context.obj({});
+                        widget.dict.set(PDFName.of('AA'), widgetAA);
+                    }
+                    widgetAA.set(PDFName.of('Bl'), action);
+                }
+            } catch(e) { console.warn(name); }
+        });
+
+        const finalPdfBytes = await pdfDoc.save();
+        const blob = new Blob([finalPdfBytes], { type: 'application/pdf' });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = "ficha_corrigida_final.pdf";
+        a.click();
+        statusEl.innerText = "Pronto! Ficha corrigida baixada com sucesso.";
+    } catch (err) {
+        console.error(err);
+        alert("Erro técnico: " + err.message);
+    }
+});
 </script>
 
 </body>
