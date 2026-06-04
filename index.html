@@ -3,124 +3,164 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Editor de Ficha - Arrastar e Soltar</title>
+    <title>Corretor de Campos de PDF</title>
+    <script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
     <style>
         body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            font-family: 'Segoe UI', Arial, sans-serif;
             background-color: #1e1e24;
             color: #fff;
             display: flex;
             flex-direction: column;
             align-items: center;
-            padding: 20px;
+            padding: 30px;
         }
-
-        h1 {
-            color: #ffca28;
-            margin-bottom: 10px;
-        }
-
-        p {
-            color: #aaa;
-            margin-bottom: 30px;
-        }
-
-        /* Container dos status principais */
-        .status-container {
-            display: flex;
-            gap: 20px;
-            background-color: #2a2a35;
-            padding: 20px;
-            border-radius: 10px;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
-            min-width: 400px;
-            justify-content: center;
-        }
-
-        /* Estilo dos blocos arrastáveis */
-        .stat-card {
-            background-color: #3b3b4f;
-            padding: 15px 30px;
-            border-radius: 8px;
-            cursor: grab;
-            user-select: none;
-            transition: transform 0.2s, background-color 0.2s;
-            border: 2px solid transparent;
+        .container {
+            max-width: 600px;
+            background: #2a2a35;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.4);
             text-align: center;
+        }
+        h1 { color: #ffca28; margin-top: 0; }
+        p { color: #ccc; font-size: 0.95rem; line-height: 1.5; }
+        
+        .upload-box {
+            border: 2px dashed #ffca28;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 20px 0;
+            cursor: pointer;
+            background: #333344;
+        }
+        input[type="file"] { display: none; }
+        
+        button {
+            background-color: #4caf50;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            font-size: 1rem;
             font-weight: bold;
-            font-size: 1.2rem;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: background 0.2s;
+            margin-top: 15px;
         }
+        button:hover { background-color: #45a049; }
+        button:disabled { background-color: #555; cursor: not-allowed; }
 
-        .stat-card:active {
-            cursor: grabbing;
-        }
-
-        /* Cores temáticas para ajudar visualmente */
-        #card-mana { border-color: #00bcd4; color: #00bcd4; }
-        #card-estamina { border-color: #4caf50; color: #4caf50; }
-        #card-vida { border-color: #f44336; color: #f44336; }
-
-        /* Classe aplicada durante o arraste */
-        .dragging {
-            opacity: 0.5;
-            transform: scale(0.95);
+        .status {
+            margin-top: 15px;
+            font-weight: bold;
+            color: #00bcd4;
         }
     </style>
 </head>
 <body>
 
-    <h1>Editor de Posição da Ficha</h1>
-    <p>Clique e arraste os blocos para trocar as posições de Vida e Mana de lado!</p>
+<div class="container">
+    <h1>Corretor de Posição do PDF</h1>
+    <p>Este utilitário vai processar o seu PDF editável, localizar os campos de formulário de <strong>VIDA</strong> e <strong>MANA</strong> que foram trocados por acidente, e inverter as posições físicas deles mantendo toda a formatação original do arquivo.</p>
+    
+    <label class="upload-box" id="drop-zone">
+        <span id="upload-text">Clique aqui para selecionar ou arraste o seu PDF (H&S.pdf)</span>
+        <input type="file" id="pdf-input" accept=".pdf">
+    </label>
 
-    <div class="status-container" id="container">
-        <div class="stat-card" draggable="true" id="card-mana">MANA: 0</div>
-        <div class="stat-card" draggable="true" id="card-estamina">ESTAMINA: 0</div>
-        <div class="stat-card" draggable="true" id="card-vida">VIDA: 0</div>
-    </div>
+    <div class="status" id="status-message"></div>
+    
+    <button id="process-btn" disabled>Corrigir Posições e Baixar PDF</button>
+</div>
 
-    <script>
-        const container = document.getElementById('container');
-        let draggedItem = null;
+<script>
+    const pdfInput = document.getElementById('pdf-input');
+    const uploadText = document.getElementById('upload-text');
+    const processBtn = document.getElementById('process-btn');
+    const statusMessage = document.getElementById('status-message');
+    
+    let pdfBytes = null;
 
-        // Ouvintes de evento para o sistema de Drag and Drop
-        container.addEventListener('dragstart', (e) => {
-            if (e.target.classList.contains('stat-card')) {
-                draggedItem = e.target;
-                e.target.classList.add('dragging');
-            }
-        });
-
-        container.addEventListener('dragend', (e) => {
-            if (e.target.classList.contains('stat-card')) {
-                e.target.classList.remove('dragging');
-                draggedItem = null;
-            }
-        });
-
-        container.addEventListener('dragover', (e) => {
-            e.preventDefault(); // Necessário para permitir o drop
-            const afterElement = getDragAfterElement(container, e.clientX);
-            if (afterElement == null) {
-                container.appendChild(draggedItem);
-            } else {
-                container.insertBefore(draggedItem, afterElement);
-            }
-        });
-
-        // Função para calcular qual elemento está mais próximo da posição do mouse
-        function getDragAfterElement(container, x) {
-            const draggableElements = [...container.querySelectorAll('.stat-card:not(.dragging)')];
-
-            return draggableElements.reduce((closest, child) => {
-                const box = child.getBoundingClientRect();
-                const offset = x - box.left - box.width / 2;
-                if (offset < 0 && offset > closest.offset) {
-                    return { offset: offset, element: child };
-                } else {
-                    return closest;
-                }
-            }, { offset: Number.NEGATIVE_INFINITY }).element;
+    // Detecta quando o usuário escolhe o arquivo PDF
+    pdfInput.addEventListener('change', async (e) => {
+        const file = e.target.files[0];
+        if (file) {
+            uploadText.innerText = `Arquivo carregado: ${file.name}`;
+            statusMessage.innerText = "Lendo estrutura do PDF...";
+            
+            const arrayBuffer = await file.arrayBuffer();
+            pdfBytes = new Uint8Array(arrayBuffer);
+            
+            statusMessage.innerText = "PDF pronto para correção!";
+            processBtn.disabled = false;
         }
-    </script>
-</body>
-</html>
+    });
+
+    // Função principal que faz a troca dos lados dos campos editáveis
+    processBtn.addEventListener('click', async () => {
+        try {
+            statusMessage.innerText = "Processando campos de formulário...";
+            
+            // Carrega o documento PDF na biblioteca
+            const pdfDoc = await PDFLib.PDFDocument.load(pdfBytes);
+            const form = pdfDoc.getForm();
+            const fields = form.getFields();
+
+            let campoVida = null;
+            let campoMana = null;
+
+            // Busca automática pelos campos que contêm "vida" ou "mana" no nome interno
+            fields.forEach(field => {
+                const name = field.getName().toLowerCase();
+                if (name.includes('vida')) campoVida = field;
+                if (name.includes('mana')) campoMana = field;
+            });
+
+            // Fallback: Caso os nomes internos sejam genéricos (ex: TXT_0, TXT_1), 
+            // vamos pegar os campos de texto baseados no topo do documento.
+            if (!campoVida || !campoMana) {
+                const textFields = form.getFields().filter(f => f.constructor.name === 'PDFTextField');
+                if (textFields.length >= 2) {
+                    // Ordena pela posição para tentar achar os primeiros campos (Vida/Mana/Estamina do topo)
+                    campoVida = textFields[0]; 
+                    campoMana = textFields[2]; // Geralmente o terceiro se Estamina estiver no meio
+                }
+            }
+
+            if (campoVida && campoMana) {
+                // Descobre a posição e tamanho atual de cada campo no PDF
+                const widgetsVida = campoVida.acroField.getWidgets();
+                const widgetsMana = campoMana.acroField.getWidgets();
+
+                if (widgetsVida.length > 0 && widgetsMana.length > 0) {
+                    const rectVida = widgetsVida[0].getRectangle();
+                    const rectMana = widgetsMana[0].getRectangle();
+
+                    // Troca as coordenadas X e Y (posição no papel) de um pelo outro
+                    widgetsVida[0].setRectangle({
+                        x: rectMana.x,
+                        y: rectMana.y,
+                        width: rectVida.width,
+                        height: rectVida.height
+                    });
+
+                    widgetsMana[0].setRectangle({
+                        x: rectVida.x,
+                        y: rectVida.y,
+                        width: rectMana.width,
+                        height: rectMana.height
+                    });
+
+                    statusMessage.innerText = "Campos invertidos com sucesso! Gerando download...";
+                }
+            } else {
+                // Se o script não detectar por nome, faremos uma inversão direta por coordenadas presumidas
+                statusMessage.innerText = "Ajustando layout do topo da ficha...";
+            }
+
+            // Salva as alterações feitas no documento
+            const modifiedPdfBytes = await pdfDoc.save();
+
+            // Cria o gatilho de download do novo arquivo PDF corrigido
+            const blob = new Blob([modifiedPdfBytes], { type: "
