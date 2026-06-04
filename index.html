@@ -163,4 +163,20 @@
             const modifiedPdfBytes = await pdfDoc.save();
 
             // Cria o gatilho de download do novo arquivo PDF corrigido
-            const blob = new Blob([modifiedPdfBytes], { type: "
+            const blob = new Blob([modifiedPdfBytes], { type: "application/pdf" });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = "Ficha_Corrigida.pdf";
+            link.click();
+            
+            statusMessage.innerText = "Pronto! O PDF corrigido foi baixado.";
+
+        } catch (error) {
+            console.error(error);
+            statusMessage.innerText = "Erro ao processar o PDF. Verifique se ele é mesmo editável.";
+        }
+    });
+</script>
+
+</body>
+</html>
