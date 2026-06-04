@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Editor de Ficha - Arrastar e Soltar</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #1e1e24;
+            color: #fff;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+        }
+
+        h1 {
+            color: #ffca28;
+            margin-bottom: 10px;
+        }
+
+        p {
+            color: #aaa;
+            margin-bottom: 30px;
+        }
+
+        /* Container dos status principais */
+        .status-container {
+            display: flex;
+            gap: 20px;
+            background-color: #2a2a35;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+            min-width: 400px;
+            justify-content: center;
+        }
+
+        /* Estilo dos blocos arrastáveis */
+        .stat-card {
+            background-color: #3b3b4f;
+            padding: 15px 30px;
+            border-radius: 8px;
+            cursor: grab;
+            user-select: none;
+            transition: transform 0.2s, background-color 0.2s;
+            border: 2px solid transparent;
+            text-align: center;
+            font-weight: bold;
+            font-size: 1.2rem;
+        }
+
+        .stat-card:active {
+            cursor: grabbing;
+        }
+
+        /* Cores temáticas para ajudar visualmente */
+        #card-mana { border-color: #00bcd4; color: #00bcd4; }
+        #card-estamina { border-color: #4caf50; color: #4caf50; }
+        #card-vida { border-color: #f44336; color: #f44336; }
+
+        /* Classe aplicada durante o arraste */
+        .dragging {
+            opacity: 0.5;
+            transform: scale(0.95);
+        }
+    </style>
+</head>
+<body>
+
+    <h1>Editor de Posição da Ficha</h1>
+    <p>Clique e arraste os blocos para trocar as posições de Vida e Mana de lado!</p>
+
+    <div class="status-container" id="container">
+        <div class="stat-card" draggable="true" id="card-mana">MANA: 0</div>
+        <div class="stat-card" draggable="true" id="card-estamina">ESTAMINA: 0</div>
+        <div class="stat-card" draggable="true" id="card-vida">VIDA: 0</div>
+    </div>
+
+    <script>
+        const container = document.getElementById('container');
+        let draggedItem = null;
+
+        // Ouvintes de evento para o sistema de Drag and Drop
+        container.addEventListener('dragstart', (e) => {
+            if (e.target.classList.contains('stat-card')) {
+                draggedItem = e.target;
+                e.target.classList.add('dragging');
+            }
+        });
+
+        container.addEventListener('dragend', (e) => {
+            if (e.target.classList.contains('stat-card')) {
+                e.target.classList.remove('dragging');
+                draggedItem = null;
+            }
+        });
+
+        container.addEventListener('dragover', (e) => {
+            e.preventDefault(); // Necessário para permitir o drop
+            const afterElement = getDragAfterElement(container, e.clientX);
+            if (afterElement == null) {
+                container.appendChild(draggedItem);
+            } else {
+                container.insertBefore(draggedItem, afterElement);
+            }
+        });
+
+        // Função para calcular qual elemento está mais próximo da posição do mouse
+        function getDragAfterElement(container, x) {
+            const draggableElements = [...container.querySelectorAll('.stat-card:not(.dragging)')];
+
+            return draggableElements.reduce((closest, child) => {
+                const box = child.getBoundingClientRect();
+                const offset = x - box.left - box.width / 2;
+                if (offset < 0 && offset > closest.offset) {
+                    return { offset: offset, element: child };
+                } else {
+                    return closest;
+                }
+            }, { offset: Number.NEGATIVE_INFINITY }).element;
+        }
+    </script>
+</body>
+</html>
