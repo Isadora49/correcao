@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Inversor de Campos PDF (C4 ⇄ C7)</title>
+    <title>Corretor de Posições e Cálculos PDF</title>
     <script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
     <style>
         body {
@@ -65,7 +65,6 @@
             color: #00bcd4;
         }
 
-        /* Caixa preta para listar os campos encontrados no seu PDF */
         .info-box {
             background: #1a1a24;
             padding: 12px;
@@ -85,19 +84,18 @@
 <body>
 
 <div class="container">
-    <h1>Corretor de Layout (C4 ⇄ C7)</h1>
-    <p>Este utilitário processa o seu PDF que <strong>já possui os campos editáveis</strong>. Ele localiza os alvos de <strong>C4 (Total 1)</strong> e <strong>C7 (Total 2)</strong> e inverte as posições físicas deles no papel, corrigindo o erro de digitação/clique.</p>
+    <h1>Corretor de Posições e Fórmulas</h1>
+    <p>Este utilitário processa seu PDF existente para <strong>inverter os lugares de C4 e C7</strong> e <strong>atualizar as fórmulas matemáticas</strong> para somar os novos campos de Texto Central aos Totais correspondentes.</p>
     
     <label class="upload-box">
-        <span id="upload-text">Clique aqui para selecionar o seu PDF já existente</span>
+        <span id="upload-text">Clique aqui para selecionar o seu PDF da Ficha</span>
         <input type="file" id="pdf-input" accept=".pdf">
     </label>
 
     <div class="status" id="status-message">Aguardando arquivo PDF...</div>
-    
     <div class="info-box" id="info-box"></div>
     
-    <button id="process-btn" disabled>Trocar Posições e Baixar PDF Corrigido</button>
+    <button id="process-btn" disabled>Aplicar Correções e Baixar PDF</button>
 </div>
 
 <script>
@@ -109,13 +107,13 @@
     
     let pdfBytes = null;
 
-    // 1. CARREGA O PDF EXISTENTE
+    // 1. CARREGA E ANALISA O PDF EXISTENTE
     pdfInput.addEventListener('change', async (e) => {
         const file = e.target.files[0];
         if (!file) return;
 
         uploadText.innerText = `Arquivo carregado: ${file.name}`;
-        statusMessage.innerText = "Analisando estrutura de campos internos...";
+        statusMessage.innerText = "Analisando campos internos...";
         
         const arrayBuffer = await file.arrayBuffer();
         pdfBytes = new Uint8Array(arrayBuffer);
@@ -125,23 +123,22 @@
             const form = pdfDoc.getForm();
             const fields = form.getFields();
             
-            // Mapeia e mostra todos os nomes de campos salvos no PDF
             const names = fields.map(f => f.getName());
-            infoBox.innerHTML = "<strong>Campos identificados no PDF:</strong><br>" + names.join(', ');
+            infoBox.innerHTML = "<strong>Campos identificados:</strong><br>" + names.join(', ');
             infoBox.style.display = "block";
             
-            statusMessage.innerText = `PDF pronto para correção! (${fields.length} campos encontrados)`;
+            statusMessage.innerText = `PDF pronto! (${fields.length} campos mapeados)`;
             processBtn.disabled = false;
         } catch (err) {
-            statusMessage.innerText = "Erro ao ler os campos internos do PDF.";
-            alert("Erro na leitura: " + err.message);
+            statusMessage.innerText = "Erro ao ler a estrutura do PDF.";
+            alert("Erro: " + err.message);
         }
     });
 
-    // 2. FAZ A INVERSÃO DE COORDENADAS DOS DOIS CAMPOS
+    // 2. PROCESSA POSIÇÕES E INJETA AS NOVAS REGRAS DE SOMA
     processBtn.addEventListener('click', async () => {
         try {
-            statusMessage.innerText = "Localizando C4 e C7 e invertendo posições...";
+            statusMessage.innerText = "Invertendo layouts e atualizando fórmulas matemáticas...";
             
             const pdfDoc = await PDFLib.PDFDocument.load(pdfBytes);
             const form = pdfDoc.getForm();
@@ -150,21 +147,14 @@
             let campoC4 = null;
             let campoC7 = null;
 
-            // Busca inteligente: verifica se o nome é 'res'/'res2' (do script antigo) ou 'c4'/'c7'
+            // Busca os campos alvos para trocar a posição visual
             fields.forEach(field => {
                 const name = field.getName().toLowerCase();
-                
-                // Identificadores possíveis para o C4 (Total 1)
-                if (name === 'res' || name === 'c4' || name === 'c4 (total 1)') {
-                    campoC4 = field;
-                }
-                // Identificadores possíveis para o C7 (Total 2)
-                if (name === 'res2' || name === 'c7' || name === 'c7 (total 2)') {
-                    campoC7 = field;
-                }
+                if (name === 'res' || name === 'c4' || name === 'c4 (total 1)') campoC4 = field;
+                if (name === 'res2' || name === 'c7' || name === 'c7 (total 2)') campoC7 = field;
             });
 
-            // Fallback por aproximação caso os nomes tenham pequenas variações
+            // Fallback por aproximação de nome
             if (!campoC4 || !campoC7) {
                 fields.forEach(field => {
                     const name = field.getName().toLowerCase();
@@ -175,17 +165,15 @@
                 });
             }
 
-            // Se achou os dois campos, faz a troca física de lugares
+            // Realiza a troca geométrica (X e Y) no layout do papel
             if (campoC4 && campoC7) {
                 const widgetsC4 = campoC4.acroField.getWidgets();
                 const widgetsC7 = campoC7.acroField.getWidgets();
 
                 if (widgetsC4.length > 0 && widgetsC7.length > 0) {
-                    // Pega as coordenadas X, Y, Largura e Altura originais de cada um
                     const rectC4 = widgetsC4[0].getRectangle();
                     const rectC7 = widgetsC7[0].getRectangle();
 
-                    // Aplica a posição do C7 no campo C4
                     widgetsC4[0].setRectangle({
                         x: rectC7.x,
                         y: rectC7.y,
@@ -193,36 +181,111 @@
                         height: rectC7.height
                     });
 
-                    // Aplica a posição original do C4 no campo C7
                     widgetsC7[0].setRectangle({
                         x: rectC4.x,
                         y: rectC4.y,
                         width: rectC4.width,
                         height: rectC4.height
                     });
-
-                    statusMessage.innerText = `Inversão concluída entre [${campoC4.getName()}] e [${campoC7.getName()}]. Salvando...`;
-
-                    // Compila o novo PDF modificado e dispara o download automático
-                    const modifiedPdfBytes = await pdfDoc.save();
-                    const blob = new Blob([modifiedPdfBytes], { type: "application/pdf" });
-                    const a = document.createElement('a');
-                    a.href = URL.createObjectURL(blob);
-                    a.download = "ficha_posicoes_corrigidas.pdf";
-                    a.click();
-                    
-                    statusMessage.innerText = "Pronto! O PDF corrigido foi baixado.";
-                } else {
-                    statusMessage.innerText = "Erro: Estrutura visual dos campos corrompida.";
                 }
-            } else {
-                statusMessage.innerText = "Erro: Não foi possível identificar os campos C4 e C7.";
-                alert("Os campos C4 e C7 não foram achados com os nomes padrão. Dê uma olhada na lista verde exibida na tela para ver como eles estão nomeados internamente.");
             }
+
+            // --- NOVO SCRIPT MOTOR COM AS SOMAS DOS MODIFICADORES CENTRAIS ---
+            const scriptMotor = [
+                'var escolha = this.getField("c1").value;',
+                'var bases = {',
+                '  "Tank": [8,2,2], "Hibrido": [4,2,4], "Assassino": [2,2,8],',
+                '  "Destruidor": [2,4,2], "Arcano": [2,4,2], "Mentalista": [2,4,2],',
+                '  "Vitalista": [2,6,2], "Invocador": [2,6,2], "Elementalista": [2,5,2]',
+                '};',
+                'var b = bases[escolha] || [0,0,0];',
+                'var valBase1 = b[0], valBase2 = b[1], valBase3 = b[2];',
+                '',
+                'function getDado(nivel) {',
+                '  nivel = Number(nivel) || 0;',
+                '  if (nivel >= 51) return "1d100"; if (nivel >= 36) return "1d50";',
+                '  if (nivel >= 26) return "1d20"; if (nivel >= 21) return "1d12";',
+                '  if (nivel >= 16) return "1d10"; if (nivel >= 11) return "1d8";',
+                '  if (nivel >= 6) return "1d6"; return "1d4";',
+                '}',
+                '',
+                'function getD(nivel) {',
+                '  return (nivel >= 51)?100:(nivel >= 36)?50:(nivel >= 26)?20:(nivel >= 21)?12:(nivel >= 16)?10:(nivel >= 11)?8:(nivel >= 6)?6:4;',
+                '}',
+                '',
+                '// Captura os valores digitados nos novos campos centrais modificadores',
+                'var modC45 = Number(this.getField("c45").value) || 0;',
+                'var modC46 = Number(this.getField("c46").value) || 0;',
+                'var modC47 = Number(this.getField("c47").value) || 0;',
+                '',
+                '// Bloco do Nível 1 (c2) -> Atualiza c3, res (C7) e c8 (C8)',
+                'var n1 = Number(this.getField("c2").value) || 0;',
+                'this.getField("c3").value = getDado(n1);',
+                'this.getField("res").value = (valBase1 * n1) + getD(n1) + modC47;   // C7 Total 2 + C47 Texto 8 Central',
+                'this.getField("c8").value = (valBase3 * n1) + getD(n1) + modC46;   // C8 Total 3 + C46 Texto 7 Central',
+                '',
+                '// Bloco do Nível 2 (c5) -> Atualiza c6 e res2 (C4)',
+                'var n2 = Number(this.getField("c5").value) || 0;',
+                'this.getField("c6").value = getDado(n2);',
+                'this.getField("res2").value = (valBase2 * n2) + getD(n2) + modC45; // C4 Total 1 + C45 Texto 6 Central',
+                '',
+                '// Loop automático para o restante das linhas de níveis e dados',
+                'for (var i = 9; i <= 35; i += 2) {',
+                '  var nivelField = this.getField("c" + i);',
+                '  var dadoField = this.getField("c" + (i + 1));',
+                '  if (nivelField && dadoField) { dadoField.value = getDado(nivelField.value); }',
+                '}'
+            ].join('\n');
+
+            // Prepara a ação em formato PDF nativo
+            const action = pdfDoc.context.obj({
+                Type: 'Action',
+                S: 'JavaScript',
+                JS: PDFString.of(scriptMotor)
+            });
+
+            form.acroForm.dict.set(PDFName.of('NeedAppearances'), pdfDoc.context.obj(true));
+
+            // Aplica a ordem de cálculo baseada no campo principal 'res'
+            try {
+                const resField = form.getField('res');
+                resField.acroField.dict.set(PDFName.of('AA'), pdfDoc.context.obj({ C: action }));
+                form.acroForm.dict.set(PDFName.of('CO'), pdfDoc.context.obj([ resField.ref ]));
+            } catch (e) { console.warn(e); }
+
+            // Configura os gatilhos em tempo de execução.
+            // ADICIONADOS: c45, c46 e c47 para recalcularem no exato momento da digitação.
+            const triggerNames = ['c1', 'c2', 'c5', 'c9', 'c11', 'c13', 'c15', 'c17', 'c19', 'c21', 'c23', 'c25', 'c27', 'c29', 'c31', 'c33', 'c35', 'c45', 'c46', 'c47'];
+            triggerNames.forEach(name => {
+                try {
+                    const field = form.getField(name);
+                    field.acroField.dict.set(PDFName.of('AA'), pdfDoc.context.obj({ K: action, V: action }));
+                    const widgets = field.acroField.getWidgets();
+                    if (widgets && widgets.length > 0) {
+                        const widget = widgets[0];
+                        let widgetAA = widget.dict.get(PDFName.of('AA'));
+                        if (!widgetAA) {
+                            widgetAA = pdfDoc.context.obj({});
+                            widget.dict.set(PDFName.of('AA'), widgetAA);
+                        }
+                        widgetAA.set(PDFName.of('Bl'), action); // Gatilho ao perder o foco (OnBlur)
+                    }
+                } catch(e) { console.warn("Aviso gatilho:", name); }
+            });
+
+            // GERA E COMPILA O NOVO ARQUIVO CORRIGIDO
+            const modifiedPdfBytes = await pdfDoc.save();
+            const blob = new Blob([modifiedPdfBytes], { type: "application/pdf" });
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = "ficha_posicoes_e_somas_corrigidas.pdf";
+            a.click();
+            
+            statusMessage.innerText = "Sucesso! Ficha baixada com layout de C4/C7 invertido e novas somas aplicadas.";
 
         } catch (err) {
             console.error(err);
-            statusMessage.innerText = "Erro técnico ao modificar o PDF.";
+            statusMessage.innerText = "Erro técnico ao processar somas matematicas.";
             alert("Erro: " + err.message);
         }
     });
