@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Atualizador de Fórmulas e Layout PDF</title>
+    <title>Corretor de Posições e Fórmulas PDF</title>
     <script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
     <style>
         body {
@@ -16,7 +16,7 @@
             padding: 30px;
         }
         .container {
-            max-width: 600px;
+            max-width: 650px;
             width: 100%;
             background: #2a2a35;
             padding: 30px;
@@ -47,7 +47,7 @@
             background-color: #4caf50;
             color: white;
             border: none;
-            padding: 12px 24px;
+            padding: 14px 24px;
             font-size: 1rem;
             font-weight: bold;
             border-radius: 6px;
@@ -72,7 +72,7 @@
             margin-top: 15px;
             font-size: 0.85rem;
             text-align: left;
-            max-height: 120px;
+            max-height: 150px;
             overflow-y: auto;
             border: 1px solid #444;
             display: none;
@@ -84,18 +84,23 @@
 <body>
 
 <div class="container">
-    <h1>Atualizador de Fórmulas da Ficha</h1>
-    <p>Este utilitário processa seu PDF editável, corrige as posições físicas e <strong>injeta os novos cálculos automáticos</strong> de soma dos modificadores centrais (C45, C46 e C47) nos Totais.</p>
+    <h1>Corretor de Posições e Somas</h1>
+    <p>Este utilitário inverte as posições físicas de <strong>C4</strong> e <strong>C7</strong> e programa o motor de cálculos automáticos para somar os bônus centrais:</p>
+    <div style="text-align: left; background: #333344; padding: 10px; border-radius: 6px; margin: 10px 0; font-size: 0.9rem; color: #ffca28;">
+        • Total 3 (C8) = Cálculo Base + C45 (Texto 6)<br>
+        • Total 1 (C4) = Cálculo Base + C46 (Texto 7)<br>
+        • Total 2 (C7) = Cálculo Base + C47 (Texto 8)
+    </div>
     
     <label class="upload-box">
-        <span id="upload-text">Clique aqui para selecionar o seu PDF da Ficha</span>
+        <span id="upload-text">Clique aqui para selecionar o seu PDF existente</span>
         <input type="file" id="pdf-input" accept=".pdf">
     </label>
 
     <div class="status" id="status-message">Aguardando arquivo PDF...</div>
     <div class="info-box" id="info-box"></div>
     
-    <button id="process-btn" disabled>Aplicar Somas e Baixar PDF Atualizado</button>
+    <button id="process-btn" disabled>Corrigir PDF e Injetar Fórmulas</button>
 </div>
 
 <script>
@@ -107,13 +112,13 @@
     
     let pdfBytes = null;
 
-    // 1. CARREGA O PDF EXISTENTE
+    // 1. ANÁLISE DO PDF CARREGADO
     pdfInput.addEventListener('change', async (e) => {
         const file = e.target.files[0];
         if (!file) return;
 
         uploadText.innerText = `Arquivo carregado: ${file.name}`;
-        statusMessage.innerText = "Analisando os campos do PDF...";
+        statusMessage.innerText = "Analisando estrutura de campos...";
         
         const arrayBuffer = await file.arrayBuffer();
         pdfBytes = new Uint8Array(arrayBuffer);
@@ -124,22 +129,21 @@
             const fields = form.getFields();
             
             const names = fields.map(f => f.getName());
-            infoBox.innerHTML = "<strong>Campos identificados:</strong><br>" + names.join(', ');
+            infoBox.innerHTML = "<strong>Campos detectados no formulário:</strong><br>" + names.join(', ');
             infoBox.style.display = "block";
             
-            statusMessage.innerText = "PDF carregado e pronto para atualização de fórmulas!";
+            statusMessage.innerText = `PDF pronto para processamento! (${fields.length} campos identificados)`;
             processBtn.disabled = false;
         } catch (err) {
-            statusMessage.innerText = "Erro ao ler as propriedades do PDF.";
+            statusMessage.innerText = "Erro ao ler a estrutura do PDF.";
             alert("Erro: " + err.message);
         }
     });
 
-    // 2. CORRIGE POSIÇÕES E INJETA AS NOVAS SOMAS
+    // 2. PROCESSAMENTO: INVERSÃO DE COORDENADAS + INJEÇÃO DO NOVO SCRIPT DE SOMA
     processBtn.addEventListener('click', async () => {
         try {
-            const { PDFName, PDFString } = PDFLib;
-            statusMessage.innerText = "Reestruturando layout e reescrevendo código de soma...";
+            statusMessage.innerText = "Executando modificações estruturais...";
             
             const pdfDoc = await PDFLib.PDFDocument.load(pdfBytes);
             const form = pdfDoc.getForm();
@@ -148,23 +152,27 @@
             let campoC4 = null;
             let campoC7 = null;
 
+            // Identificação exata ou por similaridade dos nomes internos dos alvos
+            let nameC4 = "res2";
+            let nameC7 = "res";
+            let nameC8 = "c8";
+            let nameC45 = "c45";
+            let nameC46 = "c46";
+            let nameC47 = "c47";
+
             fields.forEach(field => {
-                const name = field.getName().toLowerCase();
-                if (name === 'res' || name === 'c4' || name === 'c4 (total 1)') campoC4 = field;
-                if (name === 'res2' || name === 'c7' || name === 'c7 (total 2)') campoC7 = field;
+                const name = field.getName();
+                const lower = name.toLowerCase();
+                
+                if (lower === 'res2' || lower === 'c4' || lower.includes('total 1')) { campoC4 = field; nameC4 = name; }
+                if (lower === 'res' || lower === 'c7' || lower.includes('total 2')) { campoC7 = field; nameC7 = name; }
+                if (lower === 'c8' || lower.includes('total 3')) nameC8 = name;
+                if (lower === 'c45' || lower.includes('texto 6')) nameC45 = name;
+                if (lower === 'c46' || lower.includes('texto 7')) nameC46 = name;
+                if (lower === 'c47' || lower.includes('texto 8')) nameC47 = name;
             });
 
-            if (!campoC4 || !campoC7) {
-                fields.forEach(field => {
-                    const name = field.getName().toLowerCase();
-                    if (name.includes('res') && !name.includes('2')) campoC4 = field;
-                    if (name.includes('res2')) campoC7 = field;
-                    if (name.includes('c4')) campoC4 = field;
-                    if (name.includes('c7')) campoC7 = field;
-                });
-            }
-
-            // Mantém a inversão física que você aprovou
+            // Executa a troca física de posições entre C4 e C7 (caso encontrados)
             if (campoC4 && campoC7) {
                 const widgetsC4 = campoC4.acroField.getWidgets();
                 const widgetsC7 = campoC7.acroField.getWidgets();
@@ -175,10 +183,12 @@
 
                     widgetsC4[0].setRectangle({ x: rectC7.x, y: rectC7.y, width: rectC7.width, height: rectC7.height });
                     widgetsC7[0].setRectangle({ x: rectC4.x, y: rectC4.y, width: rectC4.width, height: rectC4.height });
+                    
+                    console.log("Posições físicas de C4 e C7 invertidas com sucesso.");
                 }
             }
 
-            // --- NOVO SCRIPT MOTOR COM AS SOMAS QUE VOCÊ PEDIU ---
+            // --- CONSTRUÇÃO DO NOVO MOTOR DE CÁLCULO ATUALIZADO COM AS SOMAS ---
             const scriptMotor = [
                 'var escolha = this.getField("c1").value;',
                 'var bases = {',
@@ -201,22 +211,26 @@
                 '  return (nivel >= 51)?100:(nivel >= 36)?50:(nivel >= 26)?20:(nivel >= 21)?12:(nivel >= 16)?10:(nivel >= 11)?8:(nivel >= 6)?6:4;',
                 '}',
                 '',
+                '// --- CÁLCULOS DO TOPO DA FICHA COM AS NOVAS SOMAS SOLICITADAS ---',
                 'var n1 = Number(this.getField("c2").value) || 0;',
                 'this.getField("c3").value = getDado(n1);',
-                '// SOMA ATUALIZADA: Total 2 (res) + Texto 7 Central (c45)',
-                'var modC45 = Number(this.getField("c45").value) || 0;',
-                'this.getField("res").value = (valBase1 * n1) + getD(n1) + modC45;',
                 '',
-                '// SOMA ATUALIZADA: Total 3 (c8) + Texto 8 Central (c46)',
-                'var modC46 = Number(this.getField("c46").value) || 0;',
-                'this.getField("c8").value = (valBase3 * n1) + getD(n1) + modC46;',
+                '// SOMA 3: C47 + C7',
+                'var bonusC47 = Number(this.getField("' + nameC47 + '").value) || 0;',
+                'this.getField("' + nameC7 + '").value = (valBase1 * n1) + getD(n1) + bonusC47;',
+                '',
+                '// SOMA 1: C45 + C8',
+                'var bonusC45 = Number(this.getField("' + nameC45 + '").value) || 0;',
+                'this.getField("' + nameC8 + '").value = (valBase3 * n1) + getD(n1) + bonusC45;',
                 '',
                 'var n2 = Number(this.getField("c5").value) || 0;',
                 'this.getField("c6").value = getDado(n2);',
-                '// SOMA ATUALIZADA: Total 1 (res2) + Texto 6 Central (c47)',
-                'var modC47 = Number(this.getField("c47").value) || 0;',
-                'this.getField("res2").value = (valBase2 * n2) + getD(n2) + modC47;',
                 '',
+                '// SOMA 2: C46 + C4',
+                'var bonusC46 = Number(this.getField("' + nameC46 + '").value) || 0;',
+                'this.getField("' + nameC4 + '").value = (valBase2 * n2) + getD(n2) + bonusC46;',
+                '',
+                '// Atualização automática dos outros dados secundários',
                 'for (var i = 9; i <= 35; i += 2) {',
                 '  var nivelField = this.getField("c" + i);',
                 '  var dadoField = this.getField("c" + (i + 1));',
@@ -224,6 +238,7 @@
                 '}'
             ].join('\n');
 
+            // Compila o script como uma Ação JavaScript nativa do PDF
             const action = pdfDoc.context.obj({
                 Type: 'Action',
                 S: 'JavaScript',
@@ -232,43 +247,55 @@
 
             form.acroForm.dict.set(PDFName.of('NeedAppearances'), pdfDoc.context.obj(true));
 
+            // Aplica o gatilho de cálculo no formulário
             try {
-                const resField = form.getField('res');
-                resField.acroField.dict.set(PDFName.of('AA'), pdfDoc.context.obj({ C: action }));
-                form.acroForm.dict.set(PDFName.of('CO'), pdfDoc.context.obj([ resField.ref ]));
-            } catch (e) { console.warn(e); }
+                const targetField = form.getField(nameC7) || form.getField(nameC4);
+                if (targetField) {
+                    targetField.acroField.dict.set(PDFName.of('AA'), pdfDoc.context.obj({ C: action }));
+                    form.acroForm.dict.set(PDFName.of('CO'), pdfDoc.context.obj([ targetField.ref ]));
+                }
+            } catch (e) { console.warn("Erro ao configurar ordem de cálculo:", e); }
 
-            // GATILHOS DE ATUALIZAÇÃO: Incluídos c45, c46 e c47 para recalcular na hora ao digitar na caixa central
-            const triggerNames = ['c1', 'c2', 'c5', 'c9', 'c11', 'c13', 'c15', 'c17', 'c19', 'c21', 'c23', 'c25', 'c27', 'c29', 'c31', 'c33', 'c35', 'c45', 'c46', 'c47'];
+            // Adiciona gatilhos de digitação em todos os campos influenciadores (incluindo os novos bônus centrais)
+            const triggerNames = [
+                'c1', 'c2', 'c5', 'c9', 'c11', 'c13', 'c15', 'c17', 'c19', 'c21', 'c23', 'c25', 'c27', 'c29', 'c31', 'c33', 'c35',
+                nameC45, nameC46, nameC47
+            ];
+
             triggerNames.forEach(name => {
                 try {
                     const field = form.getField(name);
-                    field.acroField.dict.set(PDFName.of('AA'), pdfDoc.context.obj({ K: action, V: action }));
-                    const widgets = field.acroField.getWidgets();
-                    if (widgets && widgets.length > 0) {
-                        const widget = widgets[0];
-                        let widgetAA = widget.dict.get(PDFName.of('AA'));
-                        if (!widgetAA) {
-                            widgetAA = pdfDoc.context.obj({});
-                            widget.dict.set(PDFName.of('AA'), widgetAA);
+                    if (field) {
+                        field.acroField.dict.set(PDFName.of('AA'), pdfDoc.context.obj({ K: action, V: action }));
+                        const widgets = field.acroField.getWidgets();
+                        if (widgets && widgets.length > 0) {
+                            const widget = widgets[0];
+                            let widgetAA = widget.dict.get(PDFName.of('AA'));
+                            if (!widgetAA) {
+                                widgetAA = pdfDoc.context.obj({});
+                                widget.dict.set(PDFName.of('AA'), widgetAA);
+                            }
+                            widgetAA.set(PDFName.of('Bl'), action);
                         }
-                        widgetAA.set(PDFName.of('Bl'), action);
                     }
-                } catch(e) { console.warn(name); }
+                } catch(e) { console.warn("Aviso ao vincular gatilho em:", name); }
             });
 
-            // Compilação e Download automático
+            statusMessage.innerText = "Fórmulas matemáticas injetadas com sucesso! Compilando arquivo...";
+
+            // Salva as alterações e faz o download automático
             const modifiedPdfBytes = await pdfDoc.save();
             const blob = new Blob([modifiedPdfBytes], { type: "application/pdf" });
             const a = document.createElement('a');
             a.href = URL.createObjectURL(blob);
-            a.download = "ficha_com_somas_calculadas.pdf";
+            a.download = "ficha_calculos_e_posicoes_ok.pdf";
             a.click();
             
-            statusMessage.innerText = "Sucesso! O PDF foi modificado com as novas regras de soma e baixado.";
+            statusMessage.innerText = "Pronto! O novo PDF inteligente foi gerado e baixado.";
+
         } catch (err) {
             console.error(err);
-            statusMessage.innerText = "Erro técnico ao aplicar equações.";
+            statusMessage.innerText = "Erro durante o processamento matemático do PDF.";
             alert("Erro: " + err.message);
         }
     });
