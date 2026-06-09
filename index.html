@@ -74,10 +74,7 @@
     <script>
         pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 
-        // Variáveis globais para guardar as duas cópias separadas na memória
-        let bytesParaVisualizacao = null;
-        let bytesParaDownload = null;
-        
+        let pdfOriginalBytes = null;
         let pdfDocumentoRenderizado = null;
         let pdfDimensõesOriginais = { width: 0, height: 0 };
 
@@ -88,12 +85,13 @@
         const numAltura = document.getElementById('numAltura');
         const statusTexto = document.getElementById('statusTexto');
 
+        // FUNÇÃO ANTI-NaN
         function obterNumeroSeguro(valor, padrao = 0) {
             const numero = parseFloat(valor);
             return isNaN(numero) ? padrao : numero;
         }
 
-        // 1. CARREGAR O PDF CRU E CRIAR AS DUAS CÓPIAS SEPARADAS
+        // Carregar e mostrar o PDF na tela
         pdfInput.addEventListener('change', async (e) => {
             const arquivo = e.target.files[0];
             if (!arquivo) return;
@@ -102,17 +100,14 @@
             statusTexto.innerText = "Carregando mapa da ficha...";
             
             try {
-                // Lemos o arquivo uma única vez do disco
-                const bufferOriginal = await arquivo.arrayBuffer();
+                // Guarda o buffer original na variável global
+                pdfOriginalBytes = await arquivo.arrayBuffer();
                 
-                // Correção do erro: Criamos duas cópias clonadas e independentes na memória
-                bytesParaVisualizacao = bufferOriginal.slice(0);
-                bytesParaDownload = bufferOriginal.slice(0);
-
-                // Usa a cópia 1 apenas para desenhar na tela
-                const dadosCarregados = pdfjsLib.getDocument({ data: bytesParaVisualizacao });
+                // CORREÇÃO AQUI: Passamos uma CÓPIA (.slice(0)) para o PDF.js não desanexar a memória original
+                const copiaParaVisualizacao = pdfOriginalBytes.slice(0);
+                const dadosCarregados = pdfjsLib.getDocument({ data: copiaParaVisualizacao });
+                
                 pdfDocumentoRenderizado = await dadosCarregados.promise;
-                
                 const pagina = await pdfDocumentoRenderizado.getPage(1);
                 const viewportOriginal = pagina.getViewport({ scale: 1.0 });
                 
@@ -137,7 +132,7 @@
             }
         });
 
-        // Controles de Arrastar e Redimensionar da Caixa Visual
+        // Controles de Arrastar e Redimensionar da Caixa (Mantidos intactos)
         let arrastando = false, redimensionando = false;
         let noX = 0, noY = 0, larguraInicio = 0, alturaInicio = 0;
 
@@ -187,18 +182,18 @@
         numLargura.addEventListener('input', atualizarCaixaPorInputs);
         numAltura.addEventListener('input', atualizarCaixaPorInputs);
 
-        // 2. GERAÇÃO DO PDF USANDO A SEGUNDA CÓPIA INTACTA DA MEMÓRIA
+        // --- GERAÇÃO DO PDF ---
         async function gerarPdfInterativo() {
-            if (!bytesParaDownload) { alert("Por favor, carregue um PDF primeiro!"); return; }
+            if (!pdfOriginalBytes) { alert("Por favor, carregue um PDF primeiro!"); return; }
 
             statusTexto.style.color = "#00b37e";
             statusTexto.innerText = "Injetando código de imagem interativa...";
 
             try {
-                // Importante: Usamos o ".slice(0)" novamente para garantir que se o usuário clicar em baixar duas vezes seguidas, não quebre na segunda tentativa.
-                const bytesLimpos = bytesParaDownload.slice(0);
+                // CORREÇÃO AQUI: Passamos outra CÓPIA (.slice(0)) para garantir que o ArrayBuffer esteja intacto
+                const copiaParaEdicao = pdfOriginalBytes.slice(0);
+                const pdfDoc = await PDFLib.PDFDocument.load(copiaParaEdicao);
                 
-                const pdfDoc = await PDFLib.PDFDocument.load(bytesLimpos);
                 const form = pdfDoc.getForm();
                 const paginas = pdfDoc.getPages();
                 const primeiraPagina = paginas[0];
@@ -220,4 +215,44 @@
                 const pdfAltura = htmlAltura * fatorY;
 
                 if (isNaN(pdfX) || isNaN(pdfY) || isNaN(pdfLargura) || isNaN(pdfAltura)) {
-                    throw new Error("Cálculo corrompido detectado. Uma das coordenadas resultou em NaN
+                    throw new Error("Cálculo corrompido detectado. Uma das coordenadas resultou em NaN.");
+                }
+
+                const nomeDoCampo = "Campo_Avatar_RPG_" + Math.floor(Math.random() * 10000);
+                const botaoImagem = form.createButton(nomeDoCampo);
+                
+                botaoImagem.addToPage(primeiraPagina, {
+                    x: pdfX,
+                    y: pdfY,
+                    width: pdfLargura,
+                    height: pdfAltura
+                });
+
+                const widgets = botaoImagem.acroField.getWidgets();
+                if (widgets && widgets.length > 0) {
+                    const primeiroWidget = widgets[0];
+                    const acaoJS = pdfDoc.context.obj({
+                        S: 'JavaScript',
+                        JS: `try { this.importIcon("${nomeDoCampo}"); } catch(e) { app.alert("Para escolher a imagem do personagem, certifique-se de abrir esta ficha usando o software Adobe Acrobat Reader no Computador."); }`
+                    });
+                    primeiroWidget.dict.set(PDFLib.PDFName.of('A'), acaoJS);
+                }
+
+                const pdfModificadoBytes = await pdfDoc.save();
+                const blob = new Blob([pdfModificadoBytes], { type: "application/pdf" });
+
+                const link = document.createElement('a');
+                link.href = URL.createObjectURL(blob);
+                link.download = `ficha_preparada_com_campo_imagem.pdf`;
+                link.click();
+
+                statusTexto.innerText = "Pronto! Ficha baixada com o campo de imagem ativo.";
+            } catch (erro) {
+                console.error(erro);
+                statusTexto.style.color = "#ff4757";
+                statusTexto.innerText = "Erro no processamento: " + erro.message;
+            }
+        }
+    </script>
+</body>
+</html>
