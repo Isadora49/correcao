@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Editor de Ficha RPG - Posicionamento Visual</title>
+    <title>Criador de Campo de Imagem - Ficha RPG</title>
     
     <script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
@@ -16,8 +16,8 @@
         .campo { flex: 1; min-width: 200px; display: flex; flex-direction: column; }
         label { font-size: 13px; color: #a8a8b3; margin-bottom: 5px; font-weight: bold; }
         input[type="file"], input[type="number"] { background: #121214; border: 1px solid #41414d; padding: 10px; border-radius: 4px; color: #fff; }
-        button { background: #ff4757; color: #fff; border: none; padding: 12px 20px; font-size: 16px; font-weight: bold; border-radius: 4px; cursor: pointer; width: 100%; transition: 0.2s; }
-        button:hover { background: #e84118; }
+        button { background: #00b37e; color: #fff; border: none; padding: 12px 20px; font-size: 16px; font-weight: bold; border-radius: 4px; cursor: pointer; width: 100%; transition: 0.2s; }
+        button:hover { background: #00875f; }
         
         /* Área do Canvas e do Quadrado Arrastável */
         .area-trabalho { position: relative; margin-top: 10px; border: 2px dashed #41414d; background: #202024; display: inline-block; max-width: 100%; overflow: auto; }
@@ -26,36 +26,29 @@
         /* Caixa do Avatar customizável */
         #caixaAvatar {
             position: absolute; top: 50px; left: 50px; width: 120px; height: 120px;
-            border: 2px solid #ff4757; background: rgba(255, 71, 87, 0.3);
+            border: 2px dashed #ff4757; background: rgba(255, 71, 87, 0.2);
             cursor: move; user-select: none; box-sizing: border-box; display: none;
         }
-        /* Alça de redimensionamento no canto inferior direito */
         .alca-redimensionar {
             position: absolute; width: 15px; height: 15px; background: #ff4757;
             bottom: 0; right: 0; cursor: se-resize;
         }
-        .status { text-align: center; margin-top: 10px; font-weight: bold; color: #00b37e; }
+        .status { text-align: center; margin-top: 10px; font-weight: bold; color: #ff4757; }
+        .instrucoes { background: #29292e; padding: 10px; border-radius: 6px; font-size: 13px; color: #c4c4cc; margin-top: 10px; }
     </style>
 </head>
 <body>
 
     <div class="painel-controle">
-        <h2>Editor Visual de Ficha</h2>
+        <h2>Criador de Campo de Imagem Interativo</h2>
         
         <div class="linha">
             <div class="campo">
-                <label>1. Carregar PDF da Ficha</label>
+                <label>1. Carregar o PDF da Ficha Limpa</label>
                 <input type="file" id="pdfInput" accept=".pdf">
             </div>
             <div class="campo">
-                <label>2. Carregar Foto do Personagem</label>
-                <input type="file" id="imageInput" accept=".png, .jpg, .jpeg">
-            </div>
-        </div>
-
-        <div class="linha">
-            <div class="campo">
-                <label>Ajuste de Tamanho Manual (Opcional)</label>
+                <label>Tamanho Manual do Campo (Opcional)</label>
                 <div style="display:flex; gap:5px;">
                     <input type="number" id="numLargura" value="120" style="width:50%">
                     <input type="number" id="numAltura" value="120" style="width:50%">
@@ -63,8 +56,12 @@
             </div>
         </div>
 
-        <button onclick="salvarPdfFinal()">Aplicar Foto e Baixar PDF</button>
-        <div id="statusTexto" class="status"></div>
+        <button onclick="gerarPdfInterativo()">Gerar Campo e Baixar PDF</button>
+        <div id="statusTexto" class="status" style="color: #00b37e;"></div>
+        
+        <div class="instrucoes">
+            <strong>Como usar:</strong> Suba a ficha, arraste o quadrado vermelho para onde o "Avatar" deve ficar e clique no botão verde. O PDF baixado terá um campo clicável para o jogador colocar a foto dele quando quiser.
+        </div>
     </div>
 
     <div class="area-trabalho" id="areaTrabalho">
@@ -75,7 +72,6 @@
     </div>
 
     <script>
-        // Configuração obrigatória do PDF.js para funcionar via link (CDN)
         pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 
         let pdfOriginalBytes = null;
@@ -85,88 +81,78 @@
         const pdfInput = document.getElementById('pdfInput');
         const canvas = document.getElementById('pdfCanvas');
         const caixaAvatar = document.getElementById('caixaAvatar');
-        const areaTrabalho = document.getElementById('areaTrabalho');
         const numLargura = document.getElementById('numLargura');
         const numAltura = document.getElementById('numAltura');
         const statusTexto = document.getElementById('statusTexto');
 
-        // --- 1. FUNÇÃO DE PROTEÇÃO CONTRA NaN ---
-        // Garante que qualquer cálculo que falhar retorne um número padrão seguro
+        // FUNÇÃO ANTI-NaN: Garante que strings vazias ou nulas virem números válidos
         function obterNumeroSeguro(valor, padrao = 0) {
             const numero = parseFloat(valor);
             return isNaN(numero) ? padrao : numero;
         }
 
-        // --- 2. CARREGAR E RENDERIZAR O PDF VISUALMENTE ---
+        // Carregar e mostrar o PDF na tela
         pdfInput.addEventListener('change', async (e) => {
             const arquivo = e.target.files[0];
             if (!arquivo) return;
 
-            statusTexto.innerText = "Carregando visualização da ficha...";
+            statusTexto.style.color = "#00b37e";
+            statusTexto.innerText = "Carregando mapa da ficha...";
             
             try {
                 pdfOriginalBytes = await arquivo.arrayBuffer();
-                
-                // Carrega o PDF para visualização na tela
                 const dadosCarregados = pdfjsLib.getDocument({ data: pdfOriginalBytes });
                 pdfDocumentoRenderizado = await dadosCarregados.promise;
                 
-                // Pega a primeira página
                 const pagina = await pdfDocumentoRenderizado.getPage(1);
-                
-                // Pega as dimensões reais do PDF (Será usado para evitar o erro de NaN)
                 const viewportOriginal = pagina.getViewport({ scale: 1.0 });
+                
+                // Proteção para nunca salvar dimensões como NaN
                 pdfDimensõesOriginais.width = obterNumeroSeguro(viewportOriginal.width, 595);
                 pdfDimensõesOriginais.height = obterNumeroSeguro(viewportOriginal.height, 842);
 
-                // Define uma escala de visualização confortável na tela
                 const escalaTela = 1.2;
                 const viewportContexto = pagina.getViewport({ scale: escalaTela });
-
                 const contexto = canvas.getContext('2d');
+                
                 canvas.width = viewportContexto.width;
                 canvas.height = viewportContexto.height;
 
-                // Renderiza o PDF de fato dentro do Canvas HTML
                 await pagina.render({ canvasContext: contexto, viewport: viewportContexto }).promise;
 
-                // Mostra a caixa do Avatar por cima
                 caixaAvatar.style.display = "block";
-                statusTexto.innerText = "Ficha carregada! Arraste o quadrado vermelho para onde quer a foto.";
+                statusTexto.innerText = "Ficha carregada! Posicione o campo vermelho.";
             } catch (erro) {
                 console.error(erro);
-                statusTexto.innerText = "Erro ao renderizar PDF: " + erro.message;
+                statusTexto.style.color = "#ff4757";
+                statusTexto.innerText = "Erro ao carregar: " + erro.message;
             }
         });
 
-        // --- 3. LÓGICA DE ARRASTAR E REDIMENSIONAR (MOUSE E TOQUE) ---
+        // Controles de Arrastar e Redimensionar da Caixa
         let arrastando = false, redimensionando = false;
         let noX = 0, noY = 0, larguraInicio = 0, alturaInicio = 0;
 
-        // Iniciar Arrastar
         caixaAvatar.addEventListener('mousedown', (e) => {
-            if (e.target.id === 'alca') return; // Se clicou na alça, pula para redimensionar
+            if (e.target.id === 'alca') return;
             arrastando = true;
             noX = e.clientX - caixaAvatar.offsetLeft;
             noY = e.clientY - caixaAvatar.offsetTop;
         });
 
-        // Iniciar Redimensionar
         document.getElementById('alca').addEventListener('mousedown', (e) => {
             redimensionando = true;
             e.stopPropagation();
             noX = e.clientX;
             noY = e.clientY;
-            larguraInicio = obterNumeroSeguro(caixaAvatar.offsetWidth);
-            alturaInicio = obterNumeroSeguro(caixaAvatar.offsetHeight);
+            larguraInicio = obterNumeroSeguro(caixaAvatar.offsetWidth, 120);
+            alturaInicio = obterNumeroSeguro(caixaAvatar.offsetHeight, 120);
         });
 
-        // Movimentação Geral (Mouse)
         document.addEventListener('mousemove', (e) => {
             if (arrastando) {
                 let x = e.clientX - noX;
                 let y = e.clientY - noY;
-                // Limita para não sair da área do PDF
                 x = Math.max(0, Math.min(x, canvas.clientWidth - caixaAvatar.offsetWidth));
                 y = Math.max(0, Math.min(y, canvas.clientHeight - caixaAvatar.offsetHeight));
                 caixaAvatar.style.left = x + 'px';
@@ -174,10 +160,8 @@
             } else if (redimensionando) {
                 let novaLargura = larguraInicio + (e.clientX - noX);
                 let novaAltura = alturaInicio + (e.clientY - noY);
-                
-                // Mantém tamanho mínimo de 30px para não sumir e quebrar cálculos
-                novaLargura = Math.max(30, novaLargura);
-                novaAltura = Math.max(30, novaAltura);
+                novaLargura = Math.max(30, novaLargura); // Evita largura zero (causa de NaN)
+                novaAltura = Math.max(30, novaAltura);   // Evita altura zero (causa de NaN)
 
                 caixaAvatar.style.width = novaLargura + 'px';
                 caixaAvatar.style.height = novaAltura + 'px';
@@ -188,81 +172,88 @@
 
         document.addEventListener('mouseup', () => { arrastando = false; redimensionando = false; });
 
-        // Sincronizar inputs manuais com a caixa visual se o usuário digitar
         function atualizarCaixaPorInputs() {
-            caixaAvatar.style.width = obterNumeroSeguro(numLargura.value, 120) + 'px';
-            caixaAvatar.style.height = obterNumeroSeguro(numAltura.value, 120) + 'px';
+            caixaAvatar.style.width = Math.max(30, obterNumeroSeguro(numLargura.value, 120)) + 'px';
+            caixaAvatar.style.height = Math.max(30, obterNumeroSeguro(numAltura.value, 120)) + 'px';
         }
         numLargura.addEventListener('input', atualizarCaixaPorInputs);
         numAltura.addEventListener('input', atualizarCaixaPorInputs);
 
-
-        // --- 4. INJETAR IMAGEM USANDO COORDENADAS CONVERTIDAS (BLINDADO CONTRA NaN) ---
-        async function salvarPdfFinal() {
-            const arquivoImagem = document.getElementById('imageInput').files[0];
+        // --- GERAÇÃO DO PDF COM O CAMPO INTERATIVO EMBUTIDO ---
+        async function gerarPdfInterativo() {
             if (!pdfOriginalBytes) { alert("Por favor, carregue um PDF primeiro!"); return; }
-            if (!arquivoImagem) { alert("Por favor, selecione a foto do personagem!"); return; }
 
-            statusTexto.innerText = "Injetando imagem na ficha...";
+            statusTexto.style.color = "#00b37e";
+            statusTexto.innerText = "Injetando código de imagem interativa...";
 
             try {
-                const imagemBytes = await arquivoImagem.arrayBuffer();
                 const pdfDoc = await PDFLib.PDFDocument.load(pdfOriginalBytes);
-                
-                let imagemEmbutida;
-                if (arquivoImagem.type === "image/png") {
-                    imagemEmbutida = await pdfDoc.embedPng(imagemBytes);
-                } else {
-                    imagemEmbutida = await pdfDoc.embedJpg(imagemBytes);
-                }
-
+                const form = pdfDoc.getForm();
                 const paginas = pdfDoc.getPages();
                 const primeiraPagina = paginas[0];
 
-                // Fatores de escala entre o tamanho do Canvas na tela e o tamanho real do PDF
                 const canvasLarguraVisivel = obterNumeroSeguro(canvas.clientWidth, 1);
                 const canvasAlturaVisivel = obterNumeroSeguro(canvas.clientHeight, 1);
 
                 const fatorX = pdfDimensõesOriginais.width / canvasLarguraVisivel;
                 const fatorY = pdfDimensõesOriginais.height / canvasAlturaVisivel;
 
-                // Coletas da posição da caixa HTML
                 const htmlX = obterNumeroSeguro(caixaAvatar.offsetLeft, 0);
                 const htmlY = obterNumeroSeguro(caixaAvatar.offsetTop, 0);
-                const htmlLargura = obterNumeroSeguro(caixaAvatar.offsetWidth, 100);
-                const htmlAltura = obterNumeroSeguro(caixaAvatar.offsetHeight, 100);
+                const htmlLargura = obterNumeroSeguro(caixaAvatar.offsetWidth, 120);
+                const htmlAltura = obterNumeroSeguro(caixaAvatar.offsetHeight, 120);
 
-                // --- CONVERSÃO MATEMÁTICA PROTEGIDA ---
-                // PDF calcula o Y de baixo para cima. Canvas calcula de cima para baixo.
+                // Conversão de coordenadas (Tela -> PDF)
                 const pdfX = htmlX * fatorX;
                 const pdfY = (canvasAlturaVisivel - (htmlY + htmlAltura)) * fatorY;
                 const pdfLargura = htmlLargura * fatorX;
                 const pdfAltura = htmlAltura * fatorY;
 
-                // Validação final anti-NaN absoluta antes de mandar para a biblioteca do PDF
+                // BARREIRA ABSOLUTA ANTI-NaN: Valida todos os parâmetros antes de tocar no PDF
                 if (isNaN(pdfX) || isNaN(pdfY) || isNaN(pdfLargura) || isNaN(pdfAltura)) {
-                    throw new Error("Erro de cálculo nas coordenadas. Valores geraram NaN.");
+                    throw new Error("Cálculo corrompido detectado. Uma das coordenadas resultou em NaN.");
                 }
 
-                // Desenha a foto na posição exata determinada visualmente pelo usuário
-                primeiraPagina.drawImage(imagemEmbutida, {
+                // Criamos um nome único para o campo de imagem para não dar conflito
+                const nomeDoCampo = "Campo_Avatar_RPG_" + Math.floor(Math.random() * 10000);
+                
+                // Cria o campo interativo do tipo Botão (AcroForm Button)
+                const botaoImagem = form.createButton(nomeDoCampo);
+                
+                // Posiciona o botão de forma totalmente segura (Apenas números checados)
+                botaoImagem.addToPage(primeiraPagina, {
                     x: pdfX,
                     y: pdfY,
                     width: pdfLargura,
                     height: pdfAltura
                 });
 
-                // Salva e disponibiliza para download
-                const pdfModificadoBytes = await pdfDoc.save();
-                const blob = new BundleBlob([pdfModificadoBytes]);
-                function BundleBlob(parts) { return new Blob(parts, { type: "application/pdf" }); }
+                // Injeta a ação de JavaScript dentro do botão do PDF
+                const widgets = botaoImagem.acroField.getWidgets();
+                if (widgets && widgets.length > 0) {
+                    const primeiroWidget = widgets[0];
+                    
+                    // Esse script vai rodar DENTRO do leitor de PDF do jogador quando ele clicar na área
+                    const acaoJS = pdfDoc.context.obj({
+                        S: 'JavaScript',
+                        JS: `try { this.importIcon("${nomeDoCampo}"); } catch(e) { app.alert("Para escolher a imagem do personagem, certifique-se de abrir esta ficha usando o software Adobe Acrobat Reader no Computador."); }`
+                    });
+                    
+                    // Vincula a ação ao clique ('A' = Action)
+                    primeiroWidget.dict.set(PDFLib.PDFName.of('A'), acaoJS);
+                }
 
+                // Salva o novo PDF
+                const pdfModificadoBytes = await pdfDoc.save();
+                const blob = new Blob([pdfModificadoBytes], { type: "application/pdf" });
+
+                // Inicia o download automaticamente
                 const link = document.createElement('a');
                 link.href = URL.createObjectURL(blob);
-                link.download = `ficha_com_avatar_${arquivoImagem.name.split('.')[0]}.pdf`;
+                link.download = `ficha_preparada_com_campo_imagem.pdf`;
                 link.click();
 
-                statusTexto.innerText = "Pronto! Ficha baixada com sucesso.";
+                statusTexto.innerText = "Pronto! Ficha baixada com o campo de imagem ativo.";
             } catch (erro) {
                 console.error(erro);
                 statusTexto.style.color = "#ff4757";
