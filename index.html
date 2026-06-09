@@ -3,41 +3,46 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Criador de Botão de Avatar</title>
+    <title>Injetor de Avatar - Fichas de RPG</title>
     <script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
     <style>
         body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 20px; max-width: 500px; margin: 0 auto; background: #1e1e24; color: #fff; }
         .card { background: #2a2a35; padding: 25px; border-radius: 12px; box-shadow: 0 8px 16px rgba(0,0,0,0.3); border: 1px solid #444; }
-        h2 { text-align: center; margin-top: 0; color: #3498db; }
+        h2 { text-align: center; margin-top: 0; color: #ff4757; }
         .input-group { margin-bottom: 18px; }
         label { display: block; margin-bottom: 6px; font-weight: bold; font-size: 14px; color: #ccc; }
         input[type="file"] { width: 100%; padding: 10px; background: #1e1e24; border: 1px solid #555; border-radius: 6px; color: #fff; box-sizing: border-box; }
         .grid-ajustes { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 20px; }
         .grid-ajustes input { width: 100%; padding: 8px; background: #1e1e24; border: 1px solid #555; border-radius: 6px; color: #fff; box-sizing: border-box; }
-        button { background: #3498db; color: white; padding: 12px; border: none; border-radius: 6px; cursor: pointer; width: 100%; font-size: 16px; font-weight: bold; transition: 0.2s; }
-        button:hover { background: #2980b9; }
+        button { background: #ff4757; color: white; padding: 12px; border: none; border-radius: 6px; cursor: pointer; width: 100%; font-size: 16px; font-weight: bold; transition: 0.2s; }
+        button:hover { background: #e84118; }
         .status { margin-top: 15px; text-align: center; font-weight: bold; color: #2ed573; }
+        .aviso { font-size: 11px; color: #aaa; margin-top: 5px; display: block; }
     </style>
 </head>
 <body>
 
     <div class="card">
-        <h2>Injetar Botão Interativo no PDF</h2>
-        <p style="font-size: 13px; color: #aaa; text-align: center;">Use esta ferramenta para criar a Ficha Mestra com o botão de upload que funciona no Adobe Acrobat.</p>
+        <h2>Injetor de Avatar RPG</h2>
         
         <div class="input-group">
-            <label>Selecione a Ficha Base (PDF):</label>
+            <label>1. Selecione o PDF da Ficha:</label>
             <input type="file" id="pdfInput" accept=".pdf">
         </div>
+        
+        <div class="input-group">
+            <label>2. Selecione a Imagem do Personagem:</label>
+            <input type="file" id="imageInput" accept=".png, .jpg, .jpeg">
+        </div>
 
-        <label>Posição do Botão na Ficha:</label>
+        <label>3. Ajuste a Posição da Imagem na Ficha:</label>
         <div class="grid-ajustes">
             <div>
-                <label>Posição X (Esquerda/Direita):</label>
+                <label>Posição X (Horizontal):</label>
                 <input type="number" id="coordX" value="400">
             </div>
             <div>
-                <label>Posição Y (Baixo/Cima):</label>
+                <label>Posição Y (Vertical):</label>
                 <input type="number" id="coordY" value="600">
             </div>
             <div>
@@ -50,85 +55,129 @@
             </div>
         </div>
 
-        <button onclick="gerarFichaMestra()">Gerar Ficha Mestra</button>
+        <button onclick="processarFicha()">Inserir Foto e Baixar PDF</button>
         <div id="status" class="status"></div>
     </div>
 
     <script>
-        async function gerarFichaMestra() {
+        async function processarFicha() {
             const pdfFile = document.getElementById('pdfInput').files[0];
+            const imageFile = document.getElementById('imageInput').files[0];
             const statusDiv = document.getElementById('status');
 
-            if (!pdfFile) {
-                alert('Por favor, envie o PDF da ficha!');
+            if (!pdfFile || !imageFile) {
+                alert('Por favor, envie tanto o PDF quanto a Imagem!');
                 return;
             }
 
-            statusDiv.innerText = "Criando botão interativo...";
+            statusDiv.innerText = "Processando Magia... Aguarde.";
 
             try {
+                // Transforma os arquivos enviados em dados binários (ArrayBuffer)
                 const pdfBytes = await pdfFile.arrayBuffer();
+                const imageBytes = await imageFile.arrayBuffer();
+
+                // Carrega o documento PDF na memória do navegador
                 const pdfDoc = await PDFLib.PDFDocument.load(pdfBytes);
                 
-                // Pega ou cria o formulário da ficha
-                const form = pdfDoc.getForm();
-                
-                // Cria o campo de botão
-                const nomeDoBotao = 'BotaoAvatarRPG';
-                const button = form.createButton(nomeDoBotao);
+                // Trata e embuti a imagem de acordo com o formato dela (PNG ou JPG)
+                let imagemEmbutida;
+                if (imageFile.type === "image/png") {
+                    imagemEmbutida = await pdfDoc.embedPng(imageBytes);
+                } else {
+                    imagemEmbutida = await pdfDoc.embedJpg(imageBytes);
+                }
 
+                // Pega a primeira página da ficha (Índice 0)
+                const paginas = pdfDoc.getPages();
+                const primeiraPagina = paginas[0];
+
+                // Pega os valores de posicionamento digitados pelo usuário
                 const x = parseFloat(document.getElementById('coordX').value);
                 const y = parseFloat(document.getElementById('coordY').value);
                 const largura = parseFloat(document.getElementById('imgWidth').value);
                 const altura = parseFloat(document.getElementById('imgHeight').value);
 
-                const paginas = pdfDoc.getPages();
-                const primeiraPagina = paginas[0];
-
-                // Desenha o botão na página com uma cor de fundo clara
-                button.addToPage(primeiraPagina, {
+                // Desenha a imagem na página
+                primeiraPagina.drawImage(imagemEmbutida, {
                     x: x,
                     y: y,
                     width: largura,
                     height: altura,
-                    backgroundColor: PDFLib.rgb(0.9, 0.9, 0.9),
-                    borderColor: PDFLib.rgb(0, 0, 0),
-                    borderWidth: 1,
                 });
 
-                // A MÁGICA: Injetando o JavaScript do Acrobat dentro do PDF
-                const widget = button.acroField.getWidgets()[0];
-                
-                // Código JavaScript que rodará apenas no Adobe Acrobat do jogador
-                const codigoAcrobatJS = `
-                    try { 
-                        var campo = this.getField("${nomeDoBotao}"); 
-                        campo.buttonImportIcon(); 
-                    } catch(e) { 
-                        app.alert("Para adicionar a imagem, abra esta ficha no Adobe Acrobat Reader no computador."); 
-                    }
-                `;
-
-                // Configuração avançada do PDF-Lib para adicionar a Ação (Action) no botão
-                const jsAction = pdfDoc.context.obj({
-                    Type: 'Action',
-                    S: 'JavaScript',
-                    JS: PDFLib.PDFString.of(codigoAcrobatJS)
-                });
-                
-                // Aplica a ação ao Widget (Botão)
-                widget.dict.set(PDFLib.PDFName.of('A'), jsAction);
-
-                // Salva o PDF Mestre
+                // Salva o PDF modificado
                 const pdfModificadoBytes = await pdfDoc.save();
 
+        // Função segura para injetar o campo de imagem com código nativo no PDF
+        async function injetarCampoImagemDiretoNoPDF(pdfDoc, primeiraPagina) {
+            // Certifica-se de que temos acesso aos módulos de baixo nível da biblioteca
+            const { PDFName, PDFString } = PDFLib;
+        
+            const form = pdfDoc.getForm();
+        
+            try {
+                // 1. Cria um botão interativo que servirá de moldura para a foto
+                const botaoFoto = form.createButton('campoAvatarPersonagem');
+                
+                // Modifique os valores abaixo (x, y, width, height) para posicionar na sua ficha
+                botaoFoto.addToPage(primeiraPagina, { 
+                    x: 400, 
+                    y: 550, 
+                    width: 120, 
+                    height: 140 
+                });
+                
+                // Define o texto provisório que aparece antes do jogador escolher a foto
+                botaoFoto.setLabel('Clique para\nInserir Foto');
+        
+                // 2. TEXTO DO SCRIPT ACROBAT (Roda direto no leitor de PDF do jogador)
+                // ATENÇÃO: Mantido propositalmente sem acentos para evitar erros de encoding no PDF.
+                const acrobatJavaScript = `
+                    try {
+                        this.importIcon(event.target.name);
+                    } catch (e) {
+                        app.alert({
+                            cMsg: "AVISO: Para adicionar ou alterar a foto do personagem diretamente nesta ficha, voce precisa abrir este arquivo utilizando o programa gratuito Adobe Acrobat Reader no Computador. Leitores de internet (Chrome/Edge) e de Celular nao tem suporte para arquivos de imagem locais.",
+                            cTitle: "Suporte do Leitor de PDF",
+                            nIcon: 1
+                        });
+                    }
+                `;
+        
+                // 3. ENTRADA NA ESTRUTURA DO PDF (Prevenção de bugs de referência)
+                const botaoRef = botaoFoto.acroField.ref;
+                if (!botaoRef) throw new Error("Nao foi possivel obter a referencia do botao.");
+                
+                const botaoDict = pdfDoc.context.lookup(botaoRef);
+        
+                // 4. CRIAÇÃO DO DICIONÁRIO DE AÇÃO (/A)
+                // Transforma o texto puro em um objeto string legível para a árvore do PDF
+                const acaoDicionario = pdfDoc.context.obj({
+                    S: 'JavaScript',
+                    JS: PDFString.of(acrobatJavaScript)
+                });
+        
+                // 5. INJEÇÃO FINAL
+                // Vincula a ação de clique do mouse (/A) ao dicionário do botão
+                botaoDict.set(PDFName.of('A'), acaoDicionario);
+        
+                console.log("Campo de imagem nativo injetado com sucesso!");
+        
+            } catch (erroInterno) {
+                console.error("Erro crítico ao injetar o campo de imagem nativo:", erroInterno);
+                alert("Ocorreu um erro ao estruturar o campo de imagem. Verifique o console do navegador.");
+            }
+        }
+                
+                // Cria o link invisível para forçar o download no dispositivo do usuário
                 const blob = new Blob([pdfModificadoBytes], { type: "application/pdf" });
                 const link = document.createElement('a');
                 link.href = URL.createObjectURL(blob);
-                link.download = `Ficha_Mestra_Interativa.pdf`;
+                link.download = `ficha_pronta_${pdfFile.name}`;
                 link.click();
 
-                statusDiv.innerText = "Pronto! Ficha Mestra baixada.";
+                statusDiv.innerText = "Pronto! Download iniciado.";
             } catch (erro) {
                 console.error(erro);
                 statusDiv.style.color = "#ff4757";
