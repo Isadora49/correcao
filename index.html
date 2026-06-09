@@ -3,185 +3,133 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Injetor de Avatar - Fichas de RPG</title>
+    <title>Gerador de Ficha RPG Interativa</title>
     <script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
     <style>
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 20px; max-width: 500px; margin: 0 auto; background: #1e1e24; color: #fff; }
-        .card { background: #2a2a35; padding: 25px; border-radius: 12px; box-shadow: 0 8px 16px rgba(0,0,0,0.3); border: 1px solid #444; }
-        h2 { text-align: center; margin-top: 0; color: #ff4757; }
-        .input-group { margin-bottom: 18px; }
-        label { display: block; margin-bottom: 6px; font-weight: bold; font-size: 14px; color: #ccc; }
-        input[type="file"] { width: 100%; padding: 10px; background: #1e1e24; border: 1px solid #555; border-radius: 6px; color: #fff; box-sizing: border-box; }
-        .grid-ajustes { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 20px; }
-        .grid-ajustes input { width: 100%; padding: 8px; background: #1e1e24; border: 1px solid #555; border-radius: 6px; color: #fff; box-sizing: border-box; }
-        button { background: #ff4757; color: white; padding: 12px; border: none; border-radius: 6px; cursor: pointer; width: 100%; font-size: 16px; font-weight: bold; transition: 0.2s; }
-        button:hover { background: #e84118; }
-        .status { margin-top: 15px; text-align: center; font-weight: bold; color: #2ed573; }
-        .aviso { font-size: 11px; color: #aaa; margin-top: 5px; display: block; }
+        body { font-family: 'Segoe UI', sans-serif; padding: 20px; max-width: 450px; margin: 0 auto; background: #121214; color: #fff; }
+        .box { background: #202024; padding: 25px; border-radius: 8px; border: 1px solid #323238; box-shadow: 0 4px 10px rgba(0,0,0,0.5); }
+        h3 { text-align: center; color: #00b37e; margin-top: 0; }
+        .field { margin-bottom: 15px; }
+        label { display: block; margin-bottom: 5px; color: #c4c4cc; font-size: 14px; }
+        input { width: 100%; padding: 10px; background: #121214; border: 1px solid #29292e; border-radius: 4px; color: #fff; box-sizing: border-box; }
+        .coords { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+        button { width: 100%; background: #00b37e; color: white; padding: 12px; border: none; border-radius: 4px; font-weight: bold; cursor: pointer; margin-top: 15px; }
+        button:hover { background: #00875f; }
+        #log { margin-top: 15px; text-align: center; font-size: 13px; color: #8d8d99; }
     </style>
 </head>
 <body>
 
-    <div class="card">
-        <h2>Injetor de Avatar RPG</h2>
+    <div class="box">
+        <h3>Gerador de Campo de Foto Nativo</h3>
         
-        <div class="input-group">
-            <label>1. Selecione o PDF da Ficha:</label>
-            <input type="file" id="pdfInput" accept=".pdf">
-        </div>
-        
-        <div class="input-group">
-            <label>2. Selecione a Imagem do Personagem:</label>
-            <input type="file" id="imageInput" accept=".png, .jpg, .jpeg">
+        <div class="field">
+            <label>1. Suba o PDF base da sua Ficha:</label>
+            <input type="file" id="pdfBase" accept=".pdf">
         </div>
 
-        <label>3. Ajuste a Posição da Imagem na Ficha:</label>
-        <div class="grid-ajustes">
-            <div>
+        <label>2. Onde o campo de foto deve ficar? (Coordenadas):</label>
+        <div class="coords">
+            <div class="field">
                 <label>Posição X (Horizontal):</label>
-                <input type="number" id="coordX" value="400">
+                <input type="number" id="posX" value="400">
             </div>
-            <div>
+            <div class="field">
                 <label>Posição Y (Vertical):</label>
-                <input type="number" id="coordY" value="600">
+                <input type="number" id="posY" value="600">
             </div>
-            <div>
+            <div class="field">
                 <label>Largura (px):</label>
-                <input type="number" id="imgWidth" value="120">
+                <input type="number" id="largura" value="110">
             </div>
-            <div>
+            <div class="field">
                 <label>Altura (px):</label>
-                <input type="number" id="imgHeight" value="120">
+                <input type="number" id="altura" value="130">
             </div>
         </div>
 
-        <button onclick="processarFicha()">Inserir Foto e Baixar PDF</button>
-        <div id="status" class="status"></div>
+        <button onclick="gerarPdfInteligente()">Injetar Campo de Foto e Baixar</button>
+        <div id="log"></div>
     </div>
 
     <script>
-        async function processarFicha() {
-            const pdfFile = document.getElementById('pdfInput').files[0];
-            const imageFile = document.getElementById('imageInput').files[0];
-            const statusDiv = document.getElementById('status');
-
-            if (!pdfFile || !imageFile) {
-                alert('Por favor, envie tanto o PDF quanto a Imagem!');
+        async function gerarPdfInteligente() {
+            const fileInput = document.getElementById('pdfBase');
+            const log = document.getElementById('log');
+            
+            if (!fileInput.files[0]) {
+                alert('Por favor, selecione um arquivo PDF primeiro!');
                 return;
             }
 
-            statusDiv.innerText = "Processando Magia... Aguarde.";
+            log.style.color = "#8d8d99";
+            log.innerText = "Injetando lógica Acrobat no PDF...";
 
             try {
-                // Transforma os arquivos enviados em dados binários (ArrayBuffer)
-                const pdfBytes = await pdfFile.arrayBuffer();
-                const imageBytes = await imageFile.arrayBuffer();
-
-                // Carrega o documento PDF na memória do navegador
-                const pdfDoc = await PDFLib.PDFDocument.load(pdfBytes);
-                
-                // Trata e embuti a imagem de acordo com o formato dela (PNG ou JPG)
-                let imagemEmbutida;
-                if (imageFile.type === "image/png") {
-                    imagemEmbutida = await pdfDoc.embedPng(imageBytes);
-                } else {
-                    imagemEmbutida = await pdfDoc.embedJpg(imageBytes);
-                }
-
-                // Pega a primeira página da ficha (Índice 0)
+                const arrayBuffer = await fileInput.files[0].arrayBuffer();
+                const pdfDoc = await PDFLib.PDFDocument.load(arrayBuffer);
+                const form = pdfDoc.getForm();
                 const paginas = pdfDoc.getPages();
                 const primeiraPagina = paginas[0];
 
-                // Pega os valores de posicionamento digitados pelo usuário
-                const x = parseFloat(document.getElementById('coordX').value);
-                const y = parseFloat(document.getElementById('coordY').value);
-                const largura = parseFloat(document.getElementById('imgWidth').value);
-                const altura = parseFloat(document.getElementById('imgHeight').value);
+                // Coletas dos tamanhos informados na tela
+                const x = parseFloat(document.getElementById('posX').value) || 0;
+                const y = parseFloat(document.getElementById('posY').value) || 0;
+                const w = parseFloat(document.getElementById('largura').value) || 100;
+                const h = parseFloat(document.getElementById('altura').value) || 100;
 
-                // Desenha a imagem na página
-                primeiraPagina.drawImage(imagemEmbutida, {
-                    x: x,
-                    y: y,
-                    width: largura,
-                    height: altura,
-                });
-
-                // Salva o PDF modificado
-                const pdfModificadoBytes = await pdfDoc.save();
-
-        // Função segura para injetar o campo de imagem com código nativo no PDF
-        async function injetarCampoImagemDiretoNoPDF(pdfDoc, primeiraPagina) {
-            // Certifica-se de que temos acesso aos módulos de baixo nível da biblioteca
-            const { PDFName, PDFString } = PDFLib;
-        
-            const form = pdfDoc.getForm();
-        
-            try {
-                // 1. Cria um botão interativo que servirá de moldura para a foto
-                const botaoFoto = form.createButton('campoAvatarPersonagem');
+                // 1. Cria o campo de botão que vai receber a imagem
+                const nomeDoCampo = "campo_foto_personagem";
+                const botaoFoto = form.createButton(nomeDoCampo);
+                botaoFoto.addToPage(primeiraPagina, { x: x, y: y, width: w, height: h });
                 
-                // Modifique os valores abaixo (x, y, width, height) para posicionar na sua ficha
-                botaoFoto.addToPage(primeiraPagina, { 
-                    x: 400, 
-                    y: 550, 
-                    width: 120, 
-                    height: 140 
-                });
-                
-                // Define o texto provisório que aparece antes do jogador escolher a foto
-                botaoFoto.setLabel('Clique para\nInserir Foto');
-        
-                // 2. TEXTO DO SCRIPT ACROBAT (Roda direto no leitor de PDF do jogador)
-                // ATENÇÃO: Mantido propositalmente sem acentos para evitar erros de encoding no PDF.
-                const acrobatJavaScript = `
+                // Texto provisório para orientar o jogador
+                botaoFoto.setLabel("Clique para adicionar foto");
+
+                // 2. PROTEÇÃO CONTRA ERROS: Código JavaScript puro do Acrobat que rodará DENTRO do PDF
+                // Ele usa um bloco try/catch interno para avisar o jogador se o leitor dele for incompatível.
+                const codigoAcrobat = `
                     try {
-                        this.importIcon(event.target.name);
-                    } catch (e) {
+                        this.importIcon("${nomeDoCampo}");
+                    } catch(erro) {
                         app.alert({
-                            cMsg: "AVISO: Para adicionar ou alterar a foto do personagem diretamente nesta ficha, voce precisa abrir este arquivo utilizando o programa gratuito Adobe Acrobat Reader no Computador. Leitores de internet (Chrome/Edge) e de Celular nao tem suporte para arquivos de imagem locais.",
-                            cTitle: "Suporte do Leitor de PDF",
-                            nIcon: 1
+                            cMsg: "Aviso: Para adicionar ou alterar a foto diretamente no arquivo, você precisa abrir esta ficha usando o aplicativo gratuito 'Adobe Acrobat Reader' no Computador (PC ou Mac).\\n\\nVisualizadores de navegador (Chrome/Edge) ou de celular não possuem essa tecnologia.",
+                            nIcon: 1,
+                            cTitle: "Recurso do Sistema"
                         });
                     }
                 `;
-        
-                // 3. ENTRADA NA ESTRUTURA DO PDF (Prevenção de bugs de referência)
-                const botaoRef = botaoFoto.acroField.ref;
-                if (!botaoRef) throw new Error("Nao foi possivel obter a referencia do botao.");
-                
-                const botaoDict = pdfDoc.context.lookup(botaoRef);
-        
-                // 4. CRIAÇÃO DO DICIONÁRIO DE AÇÃO (/A)
-                // Transforma o texto puro em um objeto string legível para a árvore do PDF
-                const acaoDicionario = pdfDoc.context.obj({
-                    S: 'JavaScript',
-                    JS: PDFString.of(acrobatJavaScript)
+
+                // 3. Injeção de Baixo Nível (Garante compatibilidade e evita falhas de compilação da biblioteca)
+                const context = pdfDoc.context;
+                const acaoJS = context.obj({
+                    S: PDFLib.PDFName.of('JavaScript'),
+                    JS: PDFLib.PDFString.of(codigoAcrobat)
                 });
-        
-                // 5. INJEÇÃO FINAL
-                // Vincula a ação de clique do mouse (/A) ao dicionário do botão
-                botaoDict.set(PDFName.of('A'), acaoDicionario);
-        
-                console.log("Campo de imagem nativo injetado com sucesso!");
-        
-            } catch (erroInterno) {
-                console.error("Erro crítico ao injetar o campo de imagem nativo:", erroInterno);
-                alert("Ocorreu um erro ao estruturar o campo de imagem. Verifique o console do navegador.");
-            }
-        }
-                
-                // Cria o link invisível para forçar o download no dispositivo do usuário
+                const dicionarioAcoes = context.obj({
+                    U: acaoJS // 'U' significa Mouse Up (Quando o jogador solta o clique do mouse)
+                });
+
+                // Vincula a ação de clique diretamente nas propriedades estruturais do botão
+                botaoFoto.acroField.dict.set(PDFLib.PDFName.of('AA'), dicionarioAcoes);
+
+                // Salva o novo arquivo modificado
+                const pdfModificadoBytes = await pdfDoc.save();
+
+                // Faz o download automático do arquivo pronto
                 const blob = new Blob([pdfModificadoBytes], { type: "application/pdf" });
                 const link = document.createElement('a');
                 link.href = URL.createObjectURL(blob);
-                link.download = `ficha_pronta_${pdfFile.name}`;
+                link.download = "ficha_com_foto_habilitada.pdf";
                 link.click();
 
-                statusDiv.innerText = "Pronto! Download iniciado.";
+                log.style.color = "#00b37e";
+                log.innerText = "Sucesso! Ficha inteligente baixada.";
+
             } catch (erro) {
                 console.error(erro);
-                statusDiv.style.color = "#ff4757";
-                statusDiv.innerText = "Erro ao processar: " + erro.message;
+                log.style.color = "#f75a68";
+                log.innerText = "Erro no processamento: " + erro.message;
             }
         }
     </script>
