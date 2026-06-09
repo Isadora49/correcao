@@ -3,46 +3,41 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Injetor de Avatar - Fichas de RPG</title>
+    <title>Criador de Botão de Avatar</title>
     <script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
     <style>
         body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 20px; max-width: 500px; margin: 0 auto; background: #1e1e24; color: #fff; }
         .card { background: #2a2a35; padding: 25px; border-radius: 12px; box-shadow: 0 8px 16px rgba(0,0,0,0.3); border: 1px solid #444; }
-        h2 { text-align: center; margin-top: 0; color: #ff4757; }
+        h2 { text-align: center; margin-top: 0; color: #3498db; }
         .input-group { margin-bottom: 18px; }
         label { display: block; margin-bottom: 6px; font-weight: bold; font-size: 14px; color: #ccc; }
         input[type="file"] { width: 100%; padding: 10px; background: #1e1e24; border: 1px solid #555; border-radius: 6px; color: #fff; box-sizing: border-box; }
         .grid-ajustes { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 20px; }
         .grid-ajustes input { width: 100%; padding: 8px; background: #1e1e24; border: 1px solid #555; border-radius: 6px; color: #fff; box-sizing: border-box; }
-        button { background: #ff4757; color: white; padding: 12px; border: none; border-radius: 6px; cursor: pointer; width: 100%; font-size: 16px; font-weight: bold; transition: 0.2s; }
-        button:hover { background: #e84118; }
+        button { background: #3498db; color: white; padding: 12px; border: none; border-radius: 6px; cursor: pointer; width: 100%; font-size: 16px; font-weight: bold; transition: 0.2s; }
+        button:hover { background: #2980b9; }
         .status { margin-top: 15px; text-align: center; font-weight: bold; color: #2ed573; }
-        .aviso { font-size: 11px; color: #aaa; margin-top: 5px; display: block; }
     </style>
 </head>
 <body>
 
     <div class="card">
-        <h2>Injetor de Avatar RPG</h2>
+        <h2>Injetar Botão Interativo no PDF</h2>
+        <p style="font-size: 13px; color: #aaa; text-align: center;">Use esta ferramenta para criar a Ficha Mestra com o botão de upload que funciona no Adobe Acrobat.</p>
         
         <div class="input-group">
-            <label>1. Selecione o PDF da Ficha:</label>
+            <label>Selecione a Ficha Base (PDF):</label>
             <input type="file" id="pdfInput" accept=".pdf">
         </div>
-        
-        <div class="input-group">
-            <label>2. Selecione a Imagem do Personagem:</label>
-            <input type="file" id="imageInput" accept=".png, .jpg, .jpeg">
-        </div>
 
-        <label>3. Ajuste a Posição da Imagem na Ficha:</label>
+        <label>Posição do Botão na Ficha:</label>
         <div class="grid-ajustes">
             <div>
-                <label>Posição X (Horizontal):</label>
+                <label>Posição X (Esquerda/Direita):</label>
                 <input type="number" id="coordX" value="400">
             </div>
             <div>
-                <label>Posição Y (Vertical):</label>
+                <label>Posição Y (Baixo/Cima):</label>
                 <input type="number" id="coordY" value="600">
             </div>
             <div>
@@ -55,68 +50,85 @@
             </div>
         </div>
 
-        <button onclick="processarFicha()">Inserir Foto e Baixar PDF</button>
+        <button onclick="gerarFichaMestra()">Gerar Ficha Mestra</button>
         <div id="status" class="status"></div>
     </div>
 
     <script>
-        async function processarFicha() {
+        async function gerarFichaMestra() {
             const pdfFile = document.getElementById('pdfInput').files[0];
-            const imageFile = document.getElementById('imageInput').files[0];
             const statusDiv = document.getElementById('status');
 
-            if (!pdfFile || !imageFile) {
-                alert('Por favor, envie tanto o PDF quanto a Imagem!');
+            if (!pdfFile) {
+                alert('Por favor, envie o PDF da ficha!');
                 return;
             }
 
-            statusDiv.innerText = "Processando Magia... Aguarde.";
+            statusDiv.innerText = "Criando botão interativo...";
 
             try {
-                // Transforma os arquivos enviados em dados binários (ArrayBuffer)
                 const pdfBytes = await pdfFile.arrayBuffer();
-                const imageBytes = await imageFile.arrayBuffer();
-
-                // Carrega o documento PDF na memória do navegador
                 const pdfDoc = await PDFLib.PDFDocument.load(pdfBytes);
                 
-                // Trata e embuti a imagem de acordo com o formato dela (PNG ou JPG)
-                let imagemEmbutida;
-                if (imageFile.type === "image/png") {
-                    imagemEmbutida = await pdfDoc.embedPng(imageBytes);
-                } else {
-                    imagemEmbutida = await pdfDoc.embedJpg(imageBytes);
-                }
+                // Pega ou cria o formulário da ficha
+                const form = pdfDoc.getForm();
+                
+                // Cria o campo de botão
+                const nomeDoBotao = 'BotaoAvatarRPG';
+                const button = form.createButton(nomeDoBotao);
 
-                // Pega a primeira página da ficha (Índice 0)
-                const paginas = pdfDoc.getPages();
-                const primeiraPagina = paginas[0];
-
-                // Pega os valores de posicionamento digitados pelo usuário
                 const x = parseFloat(document.getElementById('coordX').value);
                 const y = parseFloat(document.getElementById('coordY').value);
                 const largura = parseFloat(document.getElementById('imgWidth').value);
                 const altura = parseFloat(document.getElementById('imgHeight').value);
 
-                // Desenha a imagem na página
-                primeiraPagina.drawImage(imagemEmbutida, {
+                const paginas = pdfDoc.getPages();
+                const primeiraPagina = paginas[0];
+
+                // Desenha o botão na página com uma cor de fundo clara
+                button.addToPage(primeiraPagina, {
                     x: x,
                     y: y,
                     width: largura,
                     height: altura,
+                    backgroundColor: PDFLib.rgb(0.9, 0.9, 0.9),
+                    borderColor: PDFLib.rgb(0, 0, 0),
+                    borderWidth: 1,
                 });
 
-                // Salva o PDF modificado
+                // A MÁGICA: Injetando o JavaScript do Acrobat dentro do PDF
+                const widget = button.acroField.getWidgets()[0];
+                
+                // Código JavaScript que rodará apenas no Adobe Acrobat do jogador
+                const codigoAcrobatJS = `
+                    try { 
+                        var campo = this.getField("${nomeDoBotao}"); 
+                        campo.buttonImportIcon(); 
+                    } catch(e) { 
+                        app.alert("Para adicionar a imagem, abra esta ficha no Adobe Acrobat Reader no computador."); 
+                    }
+                `;
+
+                // Configuração avançada do PDF-Lib para adicionar a Ação (Action) no botão
+                const jsAction = pdfDoc.context.obj({
+                    Type: 'Action',
+                    S: 'JavaScript',
+                    JS: PDFLib.PDFString.of(codigoAcrobatJS)
+                });
+                
+                // Aplica a ação ao Widget (Botão)
+                widget.dict.set(PDFLib.PDFName.of('A'), jsAction);
+
+                // Salva o PDF Mestre
                 const pdfModificadoBytes = await pdfDoc.save();
 
-                // Cria o link invisível para forçar o download no dispositivo do usuário
                 const blob = new Blob([pdfModificadoBytes], { type: "application/pdf" });
                 const link = document.createElement('a');
                 link.href = URL.createObjectURL(blob);
-                link.download = `ficha_pronta_${pdfFile.name}`;
+                link.download = `Ficha_Mestra_Interativa.pdf`;
                 link.click();
 
-                statusDiv.innerText = "Pronto! Download iniciado.";
+                statusDiv.innerText = "Pronto! Ficha Mestra baixada.";
             } catch (erro) {
                 console.error(erro);
                 statusDiv.style.color = "#ff4757";
