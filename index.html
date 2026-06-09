@@ -76,7 +76,6 @@
 
         let pdfOriginalBytes = null;
         let pdfDocumentoRenderizado = null;
-        let pdfDimensõesOriginais = { width: 0, height: 0 };
 
         const pdfInput = document.getElementById('pdfInput');
         const canvas = document.getElementById('pdfCanvas');
@@ -90,7 +89,7 @@
             return isNaN(numero) ? padrao : numero;
         }
 
-        // Carregar e mostrar o PDF na tela
+        // Carrega e renderiza o PDF em tela
         pdfInput.addEventListener('change', async (e) => {
             const arquivo = e.target.files[0];
             if (!arquivo) return;
@@ -101,16 +100,11 @@
             try {
                 pdfOriginalBytes = await arquivo.arrayBuffer();
                 
-                // CORREÇÃO 1: Clonamos os bytes (.slice(0)) para que o PDF.js não bloqueie a memória do arquivo original
+                // .slice(0) impede o erro de 'detached ArrayBuffer' duplicando o espaço em memória
                 const dadosCarregados = pdfjsLib.getDocument({ data: pdfOriginalBytes.slice(0) });
                 pdfDocumentoRenderizado = await dadosCarregados.promise;
                 
                 const pagina = await pdfDocumentoRenderizado.getPage(1);
-                const viewportOriginal = pagina.getViewport({ scale: 1.0 });
-                
-                pdfDimensõesOriginais.width = obterNumeroSeguro(viewportOriginal.width, 595);
-                pdfDimensõesOriginais.height = obterNumeroSeguro(viewportOriginal.height, 842);
-
                 const escalaTela = 1.2;
                 const viewportContexto = pagina.getViewport({ scale: escalaTela });
                 const contexto = canvas.getContext('2d');
@@ -129,7 +123,7 @@
             }
         });
 
-        // Controles de Arrastar e Redimensionar da Caixa (Mantido intacto)
+        // Mecânica de Arrastar e Dimensionar (Layout 100% Intacto)
         let arrastando = false, redimensionando = false;
         let noX = 0, noY = 0, larguraInicio = 0, alturaInicio = 0;
 
@@ -179,75 +173,90 @@
         numLargura.addEventListener('input', atualizarCaixaPorInputs);
         numAltura.addEventListener('input', atualizarCaixaPorInputs);
 
-        // --- GERAÇÃO DO PDF ---
+
+        // --- NOVA GERAÇÃO CIRÚRGICA (SEM PROCESSAR FORMULÁRIOS ANTIGOS) ---
         async function gerarPdfInterativo() {
             if (!pdfOriginalBytes) { alert("Por favor, carregue um PDF primeiro!"); return; }
 
             statusTexto.style.color = "#00b37e";
-            statusTexto.innerText = "Injetando código de imagem interativa...";
+            statusTexto.innerText = "Injetando campo interativo de forma segura...";
 
             try {
-                // CORREÇÃO 1.2: Passamos outra cópia isolada (.slice(0)) garantindo que o ArrayBuffer nunca esteja indisponível
+                // Abre o arquivo de forma independente em memória
                 const pdfDoc = await PDFLib.PDFDocument.load(pdfOriginalBytes.slice(0));
-                const form = pdfDoc.getForm();
                 const paginas = pdfDoc.getPages();
                 const primeiraPagina = paginas[0];
+
+                // Pega o tamanho real diretamente da página do PDF-LIB (Garante 0 erros de escala e elimina o NaN)
+                const { width: pdfWidthReal, height: pdfHeightReal } = primeiraPagina.getSize();
 
                 const canvasLarguraVisivel = obterNumeroSeguro(canvas.clientWidth, 1);
                 const canvasAlturaVisivel = obterNumeroSeguro(canvas.clientHeight, 1);
 
-                const fatorX = pdfDimensõesOriginais.width / canvasLarguraVisivel;
-                const fatorY = pdfDimensõesOriginais.height / canvasAlturaVisivel;
+                const fatorX = pdfWidthReal / canvasLarguraVisivel;
+                const fatorY = pdfHeightReal / canvasAlturaVisivel;
 
                 const htmlX = obterNumeroSeguro(caixaAvatar.offsetLeft, 0);
                 const htmlY = obterNumeroSeguro(caixaAvatar.offsetTop, 0);
                 const htmlLargura = obterNumeroSeguro(caixaAvatar.offsetWidth, 120);
                 const htmlAltura = obterNumeroSeguro(caixaAvatar.offsetHeight, 120);
 
+                // Converte as coordenadas da tela para a malha interna do PDF
                 const pdfX = htmlX * fatorX;
                 const pdfY = (canvasAlturaVisivel - (htmlY + htmlAltura)) * fatorY;
                 const pdfLargura = htmlLargura * fatorX;
                 const pdfAltura = htmlAltura * fatorY;
 
+                // Validação extrema anti-NaN
                 if (isNaN(pdfX) || isNaN(pdfY) || isNaN(pdfLargura) || isNaN(pdfAltura)) {
-                    throw new Error("Cálculo de posicionamento inválido.");
+                    throw new Error("Falha no cálculo das dimensões espaciais.");
                 }
 
                 const nomeDoCampo = "Campo_Avatar_RPG_" + Math.floor(Math.random() * 10000);
-                const botaoImagem = form.createButton(nomeDoCampo);
-                
-                botaoImagem.addToPage(primeiraPagina, {
-                    x: pdfX,
-                    y: pdfY,
-                    width: pdfLargura,
-                    height: pdfAltura
+                const codigoJS = `try { this.importIcon("${nomeDoCampo}"); } catch(e) { app.alert("Para escolher a imagem, abra a ficha no Adobe Acrobat Reader no computador."); }`;
+
+                // CONSTRUÇÃO ESTRUTURAL NATIVA (Ignora o getForm() evitando que os cálculos antigos travem)
+                const annotDict = pdfDoc.context.obj({
+                    Type: PDFLib.PDFName.of('Annot'),
+                    Subtype: PDFLib.PDFName.of('Widget'),
+                    FT: PDFLib.PDFName.of('Btn'),
+                    Ff: PDFLib.PDFNumber.of(65536), // Define o campo como Botão Interativo
+                    T: PDFLib.PDFString.of(nomeDoCampo),
+                    Rect: pdfDoc.context.array([
+                        PDFLib.PDFNumber.of(pdfX),
+                        PDFLib.PDFNumber.of(pdfY),
+                        PDFLib.PDFNumber.of(pdfX + pdfLargura),
+                        PDFLib.PDFNumber.of(pdfY + pdfAltura)
+                    ]),
+                    A: pdfDoc.context.obj({
+                        S: PDFLib.PDFName.of('JavaScript'),
+                        JS: PDFLib.PDFString.of(codigoJS)
+                    })
                 });
 
-                const widgets = botaoImagem.acroField.getWidgets();
-                if (widgets && widgets.length > 0) {
-                    const primeiroWidget = widgets[0];
-                    
-                    // O SCRIPT INTERNO DO PDF
-                    const codigoJS = `try { this.importIcon("${nomeDoCampo}"); } catch(e) { app.alert("Para escolher a imagem do personagem, certifique-se de abrir esta ficha usando o software Adobe Acrobat Reader no Computador."); }`;
+                // Registra o novo botão na raiz do documento
+                const annotRef = pdfDoc.context.register(annotDict);
 
-                    // CORREÇÃO 2: Forçamos o uso do PDFString.of() para encapsular o texto de forma correta e segura dentro do dicionário do PDF. Isso elimina o erro de NaN.
-                    const acaoJS = pdfDoc.context.obj({
-                        S: 'JavaScript',
-                        JS: PDFLib.PDFString.of(codigoJS)
-                    });
-                    
-                    primeiroWidget.dict.set(PDFLib.PDFName.of('A'), acaoJS);
+                // Procura a lista de interações da página e injeta o nosso botão nela
+                let annots = primeiraPagina.node.get(PDFLib.PDFName.of('Annots'));
+                if (!annots) {
+                    annots = pdfDoc.context.array();
+                    primeiraPagina.node.set(PDFLib.PDFName.of('Annots'), annots);
+                } else {
+                    annots = pdfDoc.context.lookup(annots);
                 }
+                annots.push(annotRef);
 
+                // Compila e inicia o download
                 const pdfModificadoBytes = await pdfDoc.save();
                 const blob = new Blob([pdfModificadoBytes], { type: "application/pdf" });
 
                 const link = document.createElement('a');
                 link.href = URL.createObjectURL(blob);
-                link.download = `ficha_rpg_interativa.pdf`;
+                link.download = `ficha_com_campo_de_foto.pdf`;
                 link.click();
 
-                statusTexto.innerText = "Pronto! Ficha baixada com o campo de imagem ativo.";
+                statusTexto.innerText = "Sucesso! Ficha baixada com o campo ativo.";
             } catch (erro) {
                 console.error(erro);
                 statusTexto.style.color = "#ff4757";
