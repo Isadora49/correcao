@@ -1,51 +1,128 @@
-import { PDFDocument, PDFName, PDFString } from 'pdf-lib';
-import * as fs from 'fs';
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Injetor de Avatar - Fichas de RPG</title>
+    <script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 20px; max-width: 500px; margin: 0 auto; background: #1e1e24; color: #fff; }
+        .card { background: #2a2a35; padding: 25px; border-radius: 12px; box-shadow: 0 8px 16px rgba(0,0,0,0.3); border: 1px solid #444; }
+        h2 { text-align: center; margin-top: 0; color: #ff4757; }
+        .input-group { margin-bottom: 18px; }
+        label { display: block; margin-bottom: 6px; font-weight: bold; font-size: 14px; color: #ccc; }
+        input[type="file"] { width: 100%; padding: 10px; background: #1e1e24; border: 1px solid #555; border-radius: 6px; color: #fff; box-sizing: border-box; }
+        .grid-ajustes { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 20px; }
+        .grid-ajustes input { width: 100%; padding: 8px; background: #1e1e24; border: 1px solid #555; border-radius: 6px; color: #fff; box-sizing: border-box; }
+        button { background: #ff4757; color: white; padding: 12px; border: none; border-radius: 6px; cursor: pointer; width: 100%; font-size: 16px; font-weight: bold; transition: 0.2s; }
+        button:hover { background: #e84118; }
+        .status { margin-top: 15px; text-align: center; font-weight: bold; color: #2ed573; }
+        .aviso { font-size: 11px; color: #aaa; margin-top: 5px; display: block; }
+    </style>
+</head>
+<body>
 
-async function injetarCampoImagem() {
-  // 1. Carrega o arquivo PDF base
-  const pdfExistenteBytes = fs.readFileSync('./fichas/ficha_base.pdf');
-  const pdfDoc = await PDFDocument.load(pdfExistenteBytes);
-  
-  // Pega a primeira página da ficha (index 0)
-  const paginas = pdfDoc.getPages();
-  const primeiraPagina = paginas[0];
-  
-  // 2. Pega o formulário do PDF
-  const formulario = pdfDoc.getForm();
+    <div class="card">
+        <h2>Injetor de Avatar RPG</h2>
+        
+        <div class="input-group">
+            <label>1. Selecione o PDF da Ficha:</label>
+            <input type="file" id="pdfInput" accept=".pdf">
+        </div>
+        
+        <div class="input-group">
+            <label>2. Selecione a Imagem do Personagem:</label>
+            <input type="file" id="imageInput" accept=".png, .jpg, .jpeg">
+        </div>
 
-  // 3. Cria o botão que servirá de campo para a foto do personagem
-  const nomeDoCampo = 'BotaoAvatarPersonagem';
-  const botaoFoto = formulario.createButton(nomeDoCampo);
-  
-  // Define a posição e o tamanho do quadrado da foto (Altere os valores conforme sua ficha)
-  botaoFoto.addToPage(primeiraPagina, {
-    x: 50,       // Posição horizontal (esquerda para direita)
-    y: 600,      // Posição vertical (baixo para cima)
-    width: 120,  // Largura do quadro da foto
-    height: 150  // Altura do quadro da foto
-  });
+        <label>3. Ajuste a Posição da Imagem na Ficha:</label>
+        <div class="grid-ajustes">
+            <div>
+                <label>Posição X (Horizontal):</label>
+                <input type="number" id="coordX" value="400">
+            </div>
+            <div>
+                <label>Posição Y (Vertical):</label>
+                <input type="number" id="coordY" value="600">
+            </div>
+            <div>
+                <label>Largura (px):</label>
+                <input type="number" id="imgWidth" value="120">
+            </div>
+            <div>
+                <label>Altura (px):</label>
+                <input type="number" id="imgHeight" value="120">
+            </div>
+        </div>
 
-  // 4. INJEÇÃO DO JAVASCRIPT DO ACROBAT (O Pulo do Gato)
-  // Criamos a ação em JavaScript que o Adobe Reader vai executar ao clicar no botão
-  const acaoJavaScript = pdfDoc.context.obj({
-    S: 'JavaScript',
-    JS: PDFString.of(
-      `try { 
-        this.importIcon("${nomeDoCampo}"); 
-       } catch(e) { 
-        app.alert("Para adicionar uma foto, abra esta ficha usando o Adobe Acrobat Reader no Computador."); 
-       }`
-    ),
-  });
+        <button onclick="processarFicha()">Inserir Foto e Baixar PDF</button>
+        <div id="status" class="status"></div>
+    </div>
 
-  // Associamos essa ação ao evento "A" (Ação/Clique) do botão
-  botaoFoto.acroField.dict.set(PDFName.of('A'), acaoJavaScript);
+    <script>
+        async function processarFicha() {
+            const pdfFile = document.getElementById('pdfInput').files[0];
+            const imageFile = document.getElementById('imageInput').files[0];
+            const statusDiv = document.getElementById('status');
 
-  // 5. Salva o novo PDF modificado
-  const pdfFinalBytes = await pdfDoc.save();
-  fs.writeFileSync('./ficha_rpg_final.pdf', pdfFinalBytes);
-  
-  console.log('✅ Ficha gerada com sucesso com campo de imagem editável!');
-}
+            if (!pdfFile || !imageFile) {
+                alert('Por favor, envie tanto o PDF quanto a Imagem!');
+                return;
+            }
 
-injetarCampoImagem().catch(err => console.error('Erro ao gerar ficha:', err));
+            statusDiv.innerText = "Processando Magia... Aguarde.";
+
+            try {
+                // Transforma os arquivos enviados em dados binários (ArrayBuffer)
+                const pdfBytes = await pdfFile.arrayBuffer();
+                const imageBytes = await imageFile.arrayBuffer();
+
+                // Carrega o documento PDF na memória do navegador
+                const pdfDoc = await PDFLib.PDFDocument.load(pdfBytes);
+                
+                // Trata e embuti a imagem de acordo com o formato dela (PNG ou JPG)
+                let imagemEmbutida;
+                if (imageFile.type === "image/png") {
+                    imagemEmbutida = await pdfDoc.embedPng(imageBytes);
+                } else {
+                    imagemEmbutida = await pdfDoc.embedJpg(imageBytes);
+                }
+
+                // Pega a primeira página da ficha (Índice 0)
+                const paginas = pdfDoc.getPages();
+                const primeiraPagina = paginas[0];
+
+                // Pega os valores de posicionamento digitados pelo usuário
+                const x = parseFloat(document.getElementById('coordX').value);
+                const y = parseFloat(document.getElementById('coordY').value);
+                const largura = parseFloat(document.getElementById('imgWidth').value);
+                const altura = parseFloat(document.getElementById('imgHeight').value);
+
+                // Desenha a imagem na página
+                primeiraPagina.drawImage(imagemEmbutida, {
+                    x: x,
+                    y: y,
+                    width: largura,
+                    height: altura,
+                });
+
+                // Salva o PDF modificado
+                const pdfModificadoBytes = await pdfDoc.save();
+
+                // Cria o link invisível para forçar o download no dispositivo do usuário
+                const blob = new Blob([pdfModificadoBytes], { type: "application/pdf" });
+                const link = document.createElement('a');
+                link.href = URL.createObjectURL(blob);
+                link.download = `ficha_pronta_${pdfFile.name}`;
+                link.click();
+
+                statusDiv.innerText = "Pronto! Download iniciado.";
+            } catch (erro) {
+                console.error(erro);
+                statusDiv.style.color = "#ff4757";
+                statusDiv.innerText = "Erro ao processar: " + erro.message;
+            }
+        }
+    </script>
+</body>
+</html>
