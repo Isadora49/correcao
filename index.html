@@ -76,7 +76,7 @@
 
         let pdfOriginalBytes = null;
         let pdfDocumentoRenderizado = null;
-        let pdfDimensõesOriginais = { width: 0, height: 0 };
+        let pdfDimensõesOriginais = { width: 595, height: 842 }; // Padrão inicial A4 seguro contra NaN
 
         const pdfInput = document.getElementById('pdfInput');
         const canvas = document.getElementById('pdfCanvas');
@@ -85,7 +85,7 @@
         const numAltura = document.getElementById('numAltura');
         const statusTexto = document.getElementById('statusTexto');
 
-        // FUNÇÃO ANTI-NaN
+        // FUNÇÃO ANTI-NaN: Garante que strings vazias ou nulas virem números válidos
         function obterNumeroSeguro(valor, padrao = 0) {
             const numero = parseFloat(valor);
             return isNaN(numero) ? padrao : numero;
@@ -100,17 +100,17 @@
             statusTexto.innerText = "Carregando mapa da ficha...";
             
             try {
-                // Guarda o buffer original na variável global
                 pdfOriginalBytes = await arquivo.arrayBuffer();
                 
-                // CORREÇÃO AQUI: Passamos uma CÓPIA (.slice(0)) para o PDF.js não desanexar a memória original
-                const copiaParaVisualizacao = pdfOriginalBytes.slice(0);
-                const dadosCarregados = pdfjsLib.getDocument({ data: copiaParaVisualizacao });
-                
+                // Fazemos uma cópia para a renderização visual não travar a memória original
+                const cópiaParaVisualizar = pdfOriginalBytes.slice(0);
+                const dadosCarregados = pdfjsLib.getDocument({ data: cópiaParaVisualizar });
                 pdfDocumentoRenderizado = await dadosCarregados.promise;
+                
                 const pagina = await pdfDocumentoRenderizado.getPage(1);
                 const viewportOriginal = pagina.getViewport({ scale: 1.0 });
                 
+                // Proteção para nunca salvar dimensões como NaN
                 pdfDimensõesOriginais.width = obterNumeroSeguro(viewportOriginal.width, 595);
                 pdfDimensõesOriginais.height = obterNumeroSeguro(viewportOriginal.height, 842);
 
@@ -132,7 +132,7 @@
             }
         });
 
-        // Controles de Arrastar e Redimensionar da Caixa (Mantidos intactos)
+        // Controles de Arrastar e Redimensionar da Caixa
         let arrastando = false, redimensionando = false;
         let noX = 0, noY = 0, larguraInicio = 0, alturaInicio = 0;
 
@@ -163,8 +163,8 @@
             } else if (redimensionando) {
                 let novaLargura = larguraInicio + (e.clientX - noX);
                 let novaAltura = alturaInicio + (e.clientY - noY);
-                novaLargura = Math.max(30, novaLargura);
-                novaAltura = Math.max(30, novaAltura);
+                novaLargura = Math.max(30, novaLargura); // Evita largura zero (causa de NaN)
+                novaAltura = Math.max(30, novaAltura);   // Evita altura zero (causa de NaN)
 
                 caixaAvatar.style.width = novaLargura + 'px';
                 caixaAvatar.style.height = novaAltura + 'px';
@@ -182,7 +182,7 @@
         numLargura.addEventListener('input', atualizarCaixaPorInputs);
         numAltura.addEventListener('input', atualizarCaixaPorInputs);
 
-        // --- GERAÇÃO DO PDF ---
+        // --- GERAÇÃO DO PDF COM O CAMPO INTERATIVO EMBUTIDO ---
         async function gerarPdfInterativo() {
             if (!pdfOriginalBytes) { alert("Por favor, carregue um PDF primeiro!"); return; }
 
@@ -190,37 +190,53 @@
             statusTexto.innerText = "Injetando código de imagem interativa...";
 
             try {
-                // CORREÇÃO AQUI: Passamos outra CÓPIA (.slice(0)) para garantir que o ArrayBuffer esteja intacto
-                const copiaParaEdicao = pdfOriginalBytes.slice(0);
-                const pdfDoc = await PDFLib.PDFDocument.load(copiaParaEdicao);
+                // SOLUÇÃO DO DETACHED ERROR: Clonar o ArrayBuffer original antes de carregar
+                const bytesClonados = pdfOriginalBytes.slice(0);
+                const pdfDoc = await PDFLib.PDFDocument.load(bytesClonados);
                 
                 const form = pdfDoc.getForm();
                 const paginas = pdfDoc.getPages();
                 const primeiraPagina = paginas[0];
 
+                // Backup de segurança para o tamanho da página vindo diretamente do PDF-LIB
+                let pdfLarguraReal = obterNumeroSeguro(pdfDimensõesOriginais.width, 0);
+                let pdfAlturaReal = obterNumeroSeguro(pdfDimensõesOriginais.height, 0);
+                
+                if (pdfLarguraReal === 0 || pdfAlturaReal === 0) {
+                    const tamanhoReal = primeiraPagina.getSize();
+                    pdfLarguraReal = tamanhoReal.width;
+                    pdfAlturaReal = tamanhoReal.height;
+                }
+
                 const canvasLarguraVisivel = obterNumeroSeguro(canvas.clientWidth, 1);
                 const canvasAlturaVisivel = obterNumeroSeguro(canvas.clientHeight, 1);
 
-                const fatorX = pdfDimensõesOriginais.width / canvasLarguraVisivel;
-                const fatorY = pdfDimensõesOriginais.height / canvasAlturaVisivel;
+                const fatorX = pdfLarguraReal / canvasLarguraVisivel;
+                const fatorY = pdfAlturaReal / canvasAlturaVisivel;
 
                 const htmlX = obterNumeroSeguro(caixaAvatar.offsetLeft, 0);
                 const htmlY = obterNumeroSeguro(caixaAvatar.offsetTop, 0);
                 const htmlLargura = obterNumeroSeguro(caixaAvatar.offsetWidth, 120);
                 const htmlAltura = obterNumeroSeguro(caixaAvatar.offsetHeight, 120);
 
+                // Conversão de coordenadas (Tela -> PDF) protegida contra inversões nulas
                 const pdfX = htmlX * fatorX;
                 const pdfY = (canvasAlturaVisivel - (htmlY + htmlAltura)) * fatorY;
                 const pdfLargura = htmlLargura * fatorX;
                 const pdfAltura = htmlAltura * fatorY;
 
+                // BARREIRA ABSOLUTA ANTI-NaN: Valida todos os parâmetros antes de tocar no PDF
                 if (isNaN(pdfX) || isNaN(pdfY) || isNaN(pdfLargura) || isNaN(pdfAltura)) {
                     throw new Error("Cálculo corrompido detectado. Uma das coordenadas resultou em NaN.");
                 }
 
+                // Criamos um nome único para o campo de imagem para não dar conflito
                 const nomeDoCampo = "Campo_Avatar_RPG_" + Math.floor(Math.random() * 10000);
+                
+                // Cria o campo interativo do tipo Botão (AcroForm Button)
                 const botaoImagem = form.createButton(nomeDoCampo);
                 
+                // Posiciona o botão de forma totalmente segura (Apenas números checados)
                 botaoImagem.addToPage(primeiraPagina, {
                     x: pdfX,
                     y: pdfY,
@@ -228,19 +244,26 @@
                     height: pdfAltura
                 });
 
+                // Injeta a ação de JavaScript dentro do botão do PDF
                 const widgets = botaoImagem.acroField.getWidgets();
                 if (widgets && widgets.length > 0) {
                     const primeiroWidget = widgets[0];
+                    
+                    // Esse script vai rodar DENTRO do leitor de PDF do jogador quando ele clicar na área
                     const acaoJS = pdfDoc.context.obj({
                         S: 'JavaScript',
                         JS: `try { this.importIcon("${nomeDoCampo}"); } catch(e) { app.alert("Para escolher a imagem do personagem, certifique-se de abrir esta ficha usando o software Adobe Acrobat Reader no Computador."); }`
                     });
+                    
+                    // Vincula a ação ao clique ('A' = Action)
                     primeiroWidget.dict.set(PDFLib.PDFName.of('A'), acaoJS);
                 }
 
+                // Salva o novo PDF
                 const pdfModificadoBytes = await pdfDoc.save();
                 const blob = new Blob([pdfModificadoBytes], { type: "application/pdf" });
 
+                // Inicia o download automaticamente
                 const link = document.createElement('a');
                 link.href = URL.createObjectURL(blob);
                 link.download = `ficha_preparada_com_campo_imagem.pdf`;
