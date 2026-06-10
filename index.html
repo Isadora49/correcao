@@ -3,10 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Laboratório: Teoria do Rich Text</title>
+    <title>Laboratório: Campo HTML/Rich Text - Corrigido</title>
     
     <script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
     
     <style>
         body { font-family: 'Segoe UI', Arial, sans-serif; background: #121214; color: #fff; margin: 0; padding: 20px; display: flex; flex-direction: column; align-items: center; }
@@ -15,7 +15,7 @@
         .linha { display: flex; gap: 15px; margin-bottom: 15px; flex-wrap: wrap; }
         .campo { flex: 1; min-width: 200px; display: flex; flex-direction: column; }
         label { font-size: 13px; color: #a8a8b3; margin-bottom: 5px; font-weight: bold; }
-        input[type="file"], input[type="number"] { background: #121214; border: 1px solid #41414d; padding: 10px; border-radius: 4px; color: #fff; }
+        input[type="file"], input[type="number"] { background: #121214; border: 1px solid #41414d; padding: 10px; border-radius: 4px; color: #fff; width: 100%; box-sizing: border-box; }
         button { background: #00b37e; color: #fff; border: none; padding: 12px 20px; font-size: 16px; font-weight: bold; border-radius: 4px; cursor: pointer; width: 100%; transition: 0.2s; }
         button:hover { background: #00875f; }
         
@@ -25,20 +25,20 @@
         #caixaAvatar {
             position: absolute; top: 50px; left: 50px; width: 150px; height: 150px;
             border: 2px dashed #ff4757; background: rgba(255, 71, 87, 0.2);
-            cursor: move; user-select: none; box-sizing: border-box; display: none;
+            cursor: move; user-select: none; box-sizing: border-box; display: none; z-index: 10;
         }
         .alca-redimensionar {
             position: absolute; width: 15px; height: 15px; background: #ff4757;
             bottom: 0; right: 0; cursor: se-resize;
         }
-        .status { text-align: center; margin-top: 10px; font-weight: bold; color: #ff4757; }
+        .status { text-align: center; margin-top: 10px; font-weight: bold; color: #00b37e; }
         .instrucoes { background: #29292e; padding: 10px; border-radius: 6px; font-size: 13px; color: #c4c4cc; margin-top: 10px; }
     </style>
 </head>
 <body>
 
     <div class="painel-controle">
-        <h2>Laboratório: Campo HTML/Rich Text</h2>
+        <h2>Laboratório: Campo Rich Text (HTML)</h2>
         
         <div class="linha">
             <div class="campo">
@@ -48,17 +48,17 @@
             <div class="campo">
                 <label>Tamanho Manual do Campo</label>
                 <div style="display:flex; gap:5px;">
-                    <input type="number" id="numLargura" value="150" style="width:50%">
-                    <input type="number" id="numAltura" value="150" style="width:50%">
+                    <input type="number" id="numLargura" value="150">
+                    <input type="number" id="numAltura" value="150">
                 </div>
             </div>
         </div>
 
         <button onclick="gerarPdfInterativo()">Gerar PDF com Rich Text</button>
-        <div id="statusTexto" class="status" style="color: #00b37e;"></div>
+        <div id="statusTexto" class="status"></div>
         
         <div class="instrucoes">
-            <strong>O Teste:</strong> Abra o PDF gerado e cole a tag HTML <code>&lt;img src="link_da_imagem.jpg"&gt;</code> dentro do campo.
+            <strong>O Teste de Fogo:</strong> Após gerar o arquivo, abra o PDF baixado no seu navegador e cole a tag HTML de imagem para testar a teoria.
         </div>
     </div>
 
@@ -70,7 +70,8 @@
     </div>
 
     <script>
-        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+        // Configuração do Worker da versão estável do PDF.js
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
 
         let pdfOriginalBytes = null;
 
@@ -86,35 +87,47 @@
             return isNaN(numero) ? padrao : numero;
         }
 
+        // Correção da Renderização Visual do PDF na Tela
         pdfInput.addEventListener('change', async (e) => {
             const arquivo = e.target.files[0];
             if (!arquivo) return;
 
             statusTexto.style.color = "#00b37e";
-            statusTexto.innerText = "Carregando...";
+            statusTexto.innerText = "Renderizando PDF na tela...";
             
             try {
                 pdfOriginalBytes = await arquivo.arrayBuffer();
-                const dadosCarregados = pdfjsLib.getDocument({ data: pdfOriginalBytes.slice(0) });
-                const pdfDocumentoRenderizado = await dadosCarregados.promise;
                 
-                const pagina = await pdfDocumentoRenderizado.getPage(1);
-                const escalaTela = 1.2;
-                const viewportContexto = pagina.getViewport({ scale: escalaTela });
+                // Força o carregamento usando a sintaxe estável da versão 2.x
+                const loadingTask = pdfjsLib.getDocument({ data: new Uint8Array(pdfOriginalBytes) });
+                const pdfDocumento = await loadingTask.promise;
+                
+                const pagina = await pdfDocumento.getPage(1);
+                const escalaTela = 1.3; // Aumentei um pouco a escala para ficar mais visível
+                const viewport = pagina.getViewport({ scale: escalaTela });
+                
                 const contexto = canvas.getContext('2d');
+                canvas.width = viewport.width;
+                canvas.height = viewport.height;
+
+                const renderContext = {
+                    canvasContext: contexto,
+                    viewport: viewport
+                };
                 
-                canvas.width = viewportContexto.width;
-                canvas.height = viewportContexto.height;
+                await pagina.render(renderContext).promise;
 
-                await pagina.render({ canvasContext: contexto, viewport: viewportContexto }).promise;
-
+                // Exibe o quadrado vermelho em cima do PDF renderizado
                 caixaAvatar.style.display = "block";
-                statusTexto.innerText = "Ficha carregada! Posicione o campo.";
+                statusTexto.innerText = "PDF carregado com sucesso! Posicione o campo vermelho.";
             } catch (erro) {
                 console.error(erro);
+                statusTexto.style.color = "#ff4757";
+                statusTexto.innerText = "Erro ao renderizar visualização: " + erro.message;
             }
         });
 
+        // Lógica de arrastar e redimensionar o quadrado vermelho
         let arrastando = false, redimensionando = false;
         let noX = 0, noY = 0, larguraInicio = 0, alturaInicio = 0;
 
@@ -145,28 +158,35 @@
             } else if (redimensionando) {
                 let novaLargura = larguraInicio + (e.clientX - noX);
                 let novaAltura = alturaInicio + (e.clientY - noY);
-                caixaAvatar.style.width = Math.max(30, novaLargura) + 'px';
-                caixaAvatar.style.height = Math.max(30, novaAltura) + 'px';
-                numLargura.value = Math.max(30, novaLargura);
-                numAltura.value = Math.max(30, novaAltura);
+                novaLargura = Math.max(30, novaLargura);
+                novaAltura = Math.max(30, novaAltura);
+
+                caixaAvatar.style.width = novaLargura + 'px';
+                caixaAvatar.style.height = novaAltura + 'px';
+                numLargura.value = novaLargura;
+                numAltura.value = novaAltura;
             }
         });
 
         document.addEventListener('mouseup', () => { arrastando = false; redimensionando = false; });
 
+        // Geração do PDF Modificado com o Campo Rich Text
         async function gerarPdfInterativo() {
-            if (!pdfOriginalBytes) { alert("Carregue um PDF primeiro!"); return; }
+            if (!pdfOriginalBytes) { alert("Por favor, carregue um PDF primeiro!"); return; }
 
             statusTexto.style.color = "#00b37e";
-            statusTexto.innerText = "Injetando Campo HTML/Rich Text...";
+            statusTexto.innerText = "Injetando campo na estrutura binária...";
 
             try {
                 const pdfDoc = await PDFLib.PDFDocument.load(pdfOriginalBytes.slice(0));
                 const primeiraPagina = pdfDoc.getPages()[0];
 
                 const { width: pdfWidthReal, height: pdfHeightReal } = primeiraPagina.getSize();
-                const fatorX = pdfWidthReal / obterNumeroSeguro(canvas.clientWidth, 1);
-                const fatorY = pdfHeightReal / obterNumeroSeguro(canvas.clientHeight, 1);
+                const canvasLarguraVisivel = obterNumeroSeguro(canvas.clientWidth, 1);
+                const canvasAlturaVisivel = obterNumeroSeguro(canvas.clientHeight, 1);
+
+                const fatorX = pdfWidthReal / canvasLarguraVisivel;
+                const fatorY = pdfHeightReal / canvasAlturaVisivel;
 
                 const htmlX = obterNumeroSeguro(caixaAvatar.offsetLeft, 0);
                 const htmlY = obterNumeroSeguro(caixaAvatar.offsetTop, 0);
@@ -174,17 +194,60 @@
                 const htmlAltura = obterNumeroSeguro(caixaAvatar.offsetHeight, 150);
 
                 const pdfX = htmlX * fatorX;
-                const pdfY = (obterNumeroSeguro(canvas.clientHeight, 1) - (htmlY + htmlAltura)) * fatorY;
+                const pdfY = (canvasAlturaVisivel - (htmlY + htmlAltura)) * fatorY;
                 const pdfLargura = htmlLargura * fatorX;
                 const pdfAltura = htmlAltura * fatorY;
 
                 const nomeDoCampo = "Campo_RichText_" + Math.floor(Math.random() * 10000);
 
-                // Configuração Mágica: Bit 13 (Multiline) + Bit 26 (RichText) = 33558528
+                // Flag combinada: Multiline (Bit 13) + RichText (Bit 26)
                 const FLAG_RICH_TEXT = 33558528;
 
                 const annotTextoDict = pdfDoc.context.obj({
                     Type: PDFLib.PDFName.of('Annot'),
                     Subtype: PDFLib.PDFName.of('Widget'),
-                    FT: PDFLib.PDFName.of('Tx'), // Text Field
-                    Ff: PDFLib.PDFNumber.
+                    FT: PDFLib.PDFName.of('Tx'), 
+                    Ff: PDFLib.PDFNumber.of(FLAG_RICH_TEXT), 
+                    T: PDFLib.PDFString.of(nomeDoCampo),
+                    V: PDFLib.PDFString.of('Cole o codigo <img src="..."> aqui'),
+                    Rect: pdfDoc.context.obj([
+                        PDFLib.PDFNumber.of(pdfX),
+                        PDFLib.PDFNumber.of(pdfY),
+                        PDFLib.PDFNumber.of(pdfX + pdfLargura),
+                        PDFLib.PDFNumber.of(pdfY + pdfAltura)
+                    ])
+                });
+
+                const annotTextoRef = pdfDoc.context.register(annotTextoDict);
+
+                let annots = primeiraPagina.node.get(PDFLib.PDFName.of('Annots'));
+                let arrayAnnots;
+                
+                if (!annots) {
+                    arrayAnnots = pdfDoc.context.obj([]);
+                    primeiraPagina.node.set(PDFLib.PDFName.of('Annots'), arrayAnnots);
+                } else {
+                    arrayAnnots = pdfDoc.context.lookup(annots);
+                }
+                
+                arrayAnnots.push(annotTextoRef);
+
+                const pdfModificadoBytes = await pdfDoc.save();
+                const blob = new Blob([pdfModificadoBytes], { type: "application/pdf" });
+
+                // Aciona o download automático do arquivo gerado para você testar
+                const link = document.createElement('a');
+                link.href = URL.createObjectURL(blob);
+                link.download = `ficha_teste_richtext.pdf`;
+                link.click();
+
+                statusTexto.innerText = "Sucesso! O download do PDF de teste começou.";
+            } catch (erro) {
+                console.error(erro);
+                statusTexto.style.color = "#ff4757";
+                statusTexto.innerText = "Erro ao gerar PDF: " + erro.message;
+            }
+        }
+    </script>
+</body>
+</html>
