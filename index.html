@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Criador de Campo de Imagem por Link - Ficha RPG</title>
+    <title>Criador de Campo de Imagem Seguro - Ficha RPG</title>
     
     <script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
@@ -38,7 +38,7 @@
 <body>
 
     <div class="painel-controle">
-        <h2>Criador de Campo de Imagem por Link</h2>
+        <h2>Criador de Campo de Imagem Defensivo</h2>
         
         <div class="linha">
             <div class="campo">
@@ -56,10 +56,6 @@
 
         <button onclick="gerarPdfInterativo()">Gerar Campos e Baixar PDF</button>
         <div id="statusTexto" class="status" style="color: #00b37e;"></div>
-        
-        <div class="instrucoes">
-            <strong>Como funcionará o PDF gerado:</strong> Ele criará a área da foto e, logo abaixo dela, um campo de texto editável escrito "Insira o link da imagem aqui". 
-        </div>
     </div>
 
     <div class="area-trabalho" id="areaTrabalho">
@@ -109,7 +105,7 @@
                 await pagina.render({ canvasContext: contexto, viewport: viewportContexto }).promise;
 
                 caixaAvatar.style.display = "block";
-                statusTexto.innerText = "Ficha carregada! Posicione o campo vermelho.";
+                statusTexto.innerText = "Ficha carregada! Posicione o campo.";
             } catch (erro) {
                 console.error(erro);
                 statusTexto.style.color = "#ff4757";
@@ -170,7 +166,7 @@
             if (!pdfOriginalBytes) { alert("Por favor, carregue um PDF primeiro!"); return; }
 
             statusTexto.style.color = "#00b37e";
-            statusTexto.innerText = "Injetando engenharia de renderização de URL...";
+            statusTexto.innerText = "Injetando código com validação de segurança...";
 
             try {
                 const pdfDoc = await PDFLib.PDFDocument.load(pdfOriginalBytes.slice(0));
@@ -197,7 +193,7 @@
                 const nomeDoCampo = "Campo_Avatar_RPG_" + Math.floor(Math.random() * 10000);
                 const nomeDoCampoLink = nomeDoCampo + "_Link";
 
-                // 1. Dicionário do BOTÃO (Onde a imagem vai aparecer renderizada)
+                // 1. O Botão que exibirá o Avatar
                 const annotBotaoDict = pdfDoc.context.obj({
                     Type: PDFLib.PDFName.of('Annot'),
                     Subtype: PDFLib.PDFName.of('Widget'),
@@ -212,35 +208,39 @@
                     ])
                 });
 
-                // Script que escuta a digitação e tenta forçar o download do stream da imagem
+                // NOVO SCRIPT: Valida se o ambiente possui a função antes de tentar rodar
                 const codigoJSLink = `
                     var url = event.value;
                     if (url && url !== "Insira o link da imagem aqui") {
-                        try {
-                            var stream = util.iconStreamFromURL(url);
-                            var campoAvatar = this.getField("${nomeDoCampo}");
-                            campoAvatar.buttonSetIcon(stream);
-                        } catch(e) {
-                            app.alert("Erro ao processar stream da URL: " + e.message);
+                        if (typeof util !== 'undefined' && typeof util.iconStreamFromURL === 'function') {
+                            try {
+                                var stream = util.iconStreamFromURL(url);
+                                var campoAvatar = this.getField("${nomeDoCampo}");
+                                campoAvatar.buttonSetIcon(stream);
+                            } catch(e) {
+                                app.alert("Erro no download do stream: " + e.message);
+                            }
+                        } else {
+                            app.alert("Aviso de Compatibilidade:\\n\\nEste navegador (Chrome/Edge/Safari) possui um leitor de PDF simplificado que não aceita renderização de imagens dinâmicas por segurança.\\n\\nPara ver a imagem aparecer aqui, abra este arquivo baixado no Adobe Acrobat Reader.");
                         }
                     }
                 `;
 
-                // 2. Dicionário do CAMPO DE TEXTO (Logo abaixo do botão para receber o link)
+                // 2. O Campo de Texto para colar a URL
                 const annotTextoDict = pdfDoc.context.obj({
                     Type: PDFLib.PDFName.of('Annot'),
                     Subtype: PDFLib.PDFName.of('Widget'),
-                    FT: PDFLib.PDFName.of('Tx'), // Tx = Text Field
+                    FT: PDFLib.PDFName.of('Tx'),
                     T: PDFLib.PDFString.of(nomeDoCampoLink),
                     V: PDFLib.PDFString.of('Insira o link da imagem aqui'),
                     Rect: pdfDoc.context.obj([
                         PDFLib.PDFNumber.of(pdfX),
-                        PDFLib.PDFNumber.of(Math.max(0, pdfY - 25)), // Posicionado 25 pontos abaixo da foto
+                        PDFLib.PDFNumber.of(Math.max(0, pdfY - 25)),
                         PDFLib.PDFNumber.of(pdfX + pdfLargura),
                         PDFLib.PDFNumber.of(pdfY - 5)
                     ]),
                     AA: pdfDoc.context.obj({
-                        K: pdfDoc.context.obj({ // Gatilho de validação de digitação (Keystroke/Validate)
+                        K: pdfDoc.context.obj({
                             S: PDFLib.PDFName.of('JavaScript'),
                             JS: PDFLib.PDFString.of(codigoJSLink)
                         })
@@ -260,7 +260,6 @@
                     arrayAnnots = pdfDoc.context.lookup(annots);
                 }
                 
-                // Injeta ambos os elementos interativos no mapa do PDF
                 arrayAnnots.push(annotBotaoRef);
                 arrayAnnots.push(annotTextoRef);
 
@@ -269,10 +268,10 @@
 
                 const link = document.createElement('a');
                 link.href = URL.createObjectURL(blob);
-                link.download = `ficha_rpg_link_imagem.pdf`;
+                link.download = `ficha_rpg_validada.pdf`;
                 link.click();
 
-                statusTexto.innerText = "Concluído! Campos de Link e Imagem gerados.";
+                statusTexto.innerText = "Concluído! PDF defensivo gerado.";
             } catch (erro) {
                 console.error(erro);
                 statusTexto.style.color = "#ff4757";
