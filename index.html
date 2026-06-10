@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Criador de Campo de Imagem - Ficha RPG</title>
+    <title>Criador de Campo de Imagem por Link - Ficha RPG</title>
     
     <script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
@@ -38,7 +38,7 @@
 <body>
 
     <div class="painel-controle">
-        <h2>Criador de Campo de Imagem Interativo</h2>
+        <h2>Criador de Campo de Imagem por Link</h2>
         
         <div class="linha">
             <div class="campo">
@@ -54,11 +54,11 @@
             </div>
         </div>
 
-        <button onclick="gerarPdfInterativo()">Gerar Campo e Baixar PDF</button>
+        <button onclick="gerarPdfInterativo()">Gerar Campos e Baixar PDF</button>
         <div id="statusTexto" class="status" style="color: #00b37e;"></div>
         
         <div class="instrucoes">
-            <strong>Modo de Teste:</strong> Posicione o campo na ficha e baixe. Para o clique funcionar direto no navegador, o usuário precisará usar a extensão do Adobe Acrobat ativa no Chrome/Edge.
+            <strong>Como funcionará o PDF gerado:</strong> Ele criará a área da foto e, logo abaixo dela, um campo de texto editável escrito "Insira o link da imagem aqui". 
         </div>
     </div>
 
@@ -170,7 +170,7 @@
             if (!pdfOriginalBytes) { alert("Por favor, carregue um PDF primeiro!"); return; }
 
             statusTexto.style.color = "#00b37e";
-            statusTexto.innerText = "Injetando código de imagem...";
+            statusTexto.innerText = "Injetando engenharia de renderização de URL...";
 
             try {
                 const pdfDoc = await PDFLib.PDFDocument.load(pdfOriginalBytes.slice(0));
@@ -195,11 +195,10 @@
                 const pdfAltura = htmlAltura * fatorY;
 
                 const nomeDoCampo = "Campo_Avatar_RPG_" + Math.floor(Math.random() * 10000);
-                
-                // Script nativo do ecossistema PDF do Acrobat
-                const codigoJS = `this.importIcon("${nomeDoCampo}");`;
+                const nomeDoCampoLink = nomeDoCampo + "_Link";
 
-                const annotDict = pdfDoc.context.obj({
+                // 1. Dicionário do BOTÃO (Onde a imagem vai aparecer renderizada)
+                const annotBotaoDict = pdfDoc.context.obj({
                     Type: PDFLib.PDFName.of('Annot'),
                     Subtype: PDFLib.PDFName.of('Widget'),
                     FT: PDFLib.PDFName.of('Btn'),
@@ -210,14 +209,46 @@
                         PDFLib.PDFNumber.of(pdfY),
                         PDFLib.PDFNumber.of(pdfX + pdfLargura),
                         PDFLib.PDFNumber.of(pdfY + pdfAltura)
+                    ])
+                });
+
+                // Script que escuta a digitação e tenta forçar o download do stream da imagem
+                const codigoJSLink = `
+                    var url = event.value;
+                    if (url && url !== "Insira o link da imagem aqui") {
+                        try {
+                            var stream = util.iconStreamFromURL(url);
+                            var campoAvatar = this.getField("${nomeDoCampo}");
+                            campoAvatar.buttonSetIcon(stream);
+                        } catch(e) {
+                            app.alert("Erro ao processar stream da URL: " + e.message);
+                        }
+                    }
+                `;
+
+                // 2. Dicionário do CAMPO DE TEXTO (Logo abaixo do botão para receber o link)
+                const annotTextoDict = pdfDoc.context.obj({
+                    Type: PDFLib.PDFName.of('Annot'),
+                    Subtype: PDFLib.PDFName.of('Widget'),
+                    FT: PDFLib.PDFName.of('Tx'), // Tx = Text Field
+                    T: PDFLib.PDFString.of(nomeDoCampoLink),
+                    V: PDFLib.PDFString.of('Insira o link da imagem aqui'),
+                    Rect: pdfDoc.context.obj([
+                        PDFLib.PDFNumber.of(pdfX),
+                        PDFLib.PDFNumber.of(Math.max(0, pdfY - 25)), // Posicionado 25 pontos abaixo da foto
+                        PDFLib.PDFNumber.of(pdfX + pdfLargura),
+                        PDFLib.PDFNumber.of(pdfY - 5)
                     ]),
-                    A: pdfDoc.context.obj({
-                        S: PDFLib.PDFName.of('JavaScript'),
-                        JS: PDFLib.PDFString.of(codigoJS)
+                    AA: pdfDoc.context.obj({
+                        K: pdfDoc.context.obj({ // Gatilho de validação de digitação (Keystroke/Validate)
+                            S: PDFLib.PDFName.of('JavaScript'),
+                            JS: PDFLib.PDFString.of(codigoJSLink)
+                        })
                     })
                 });
 
-                const annotRef = pdfDoc.context.register(annotDict);
+                const annotBotaoRef = pdfDoc.context.register(annotBotaoDict);
+                const annotTextoRef = pdfDoc.context.register(annotTextoDict);
 
                 let annots = primeiraPagina.node.get(PDFLib.PDFName.of('Annots'));
                 let arrayAnnots;
@@ -228,17 +259,20 @@
                 } else {
                     arrayAnnots = pdfDoc.context.lookup(annots);
                 }
-                arrayAnnots.push(annotRef);
+                
+                // Injeta ambos os elementos interativos no mapa do PDF
+                arrayAnnots.push(annotBotaoRef);
+                arrayAnnots.push(annotTextoRef);
 
                 const pdfModificadoBytes = await pdfDoc.save();
                 const blob = new Blob([pdfModificadoBytes], { type: "application/pdf" });
 
                 const link = document.createElement('a');
                 link.href = URL.createObjectURL(blob);
-                link.download = `ficha_rpg_campo_imagem.pdf`;
+                link.download = `ficha_rpg_link_imagem.pdf`;
                 link.click();
 
-                statusTexto.innerText = "Concluído! Documento gerado com sucesso.";
+                statusTexto.innerText = "Concluído! Campos de Link e Imagem gerados.";
             } catch (erro) {
                 console.error(erro);
                 statusTexto.style.color = "#ff4757";
