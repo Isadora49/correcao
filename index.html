@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Criador de Campo de Imagem Seguro - Ficha RPG</title>
+    <title>Laboratório: Teoria do Rich Text</title>
     
     <script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
@@ -23,7 +23,7 @@
         #pdfCanvas { display: block; max-width: 100%; height: auto; }
         
         #caixaAvatar {
-            position: absolute; top: 50px; left: 50px; width: 120px; height: 120px;
+            position: absolute; top: 50px; left: 50px; width: 150px; height: 150px;
             border: 2px dashed #ff4757; background: rgba(255, 71, 87, 0.2);
             cursor: move; user-select: none; box-sizing: border-box; display: none;
         }
@@ -38,7 +38,7 @@
 <body>
 
     <div class="painel-controle">
-        <h2>Criador de Campo de Imagem Defensivo</h2>
+        <h2>Laboratório: Campo HTML/Rich Text</h2>
         
         <div class="linha">
             <div class="campo">
@@ -46,16 +46,20 @@
                 <input type="file" id="pdfInput" accept=".pdf">
             </div>
             <div class="campo">
-                <label>Tamanho Manual do Campo (Opcional)</label>
+                <label>Tamanho Manual do Campo</label>
                 <div style="display:flex; gap:5px;">
-                    <input type="number" id="numLargura" value="120" style="width:50%">
-                    <input type="number" id="numAltura" value="120" style="width:50%">
+                    <input type="number" id="numLargura" value="150" style="width:50%">
+                    <input type="number" id="numAltura" value="150" style="width:50%">
                 </div>
             </div>
         </div>
 
-        <button onclick="gerarPdfInterativo()">Gerar Campos e Baixar PDF</button>
+        <button onclick="gerarPdfInterativo()">Gerar PDF com Rich Text</button>
         <div id="statusTexto" class="status" style="color: #00b37e;"></div>
+        
+        <div class="instrucoes">
+            <strong>O Teste:</strong> Abra o PDF gerado e cole a tag HTML <code>&lt;img src="link_da_imagem.jpg"&gt;</code> dentro do campo.
+        </div>
     </div>
 
     <div class="area-trabalho" id="areaTrabalho">
@@ -87,7 +91,7 @@
             if (!arquivo) return;
 
             statusTexto.style.color = "#00b37e";
-            statusTexto.innerText = "Carregando mapa da ficha...";
+            statusTexto.innerText = "Carregando...";
             
             try {
                 pdfOriginalBytes = await arquivo.arrayBuffer();
@@ -108,8 +112,6 @@
                 statusTexto.innerText = "Ficha carregada! Posicione o campo.";
             } catch (erro) {
                 console.error(erro);
-                statusTexto.style.color = "#ff4757";
-                statusTexto.innerText = "Erro ao carregar: " + erro.message;
             }
         });
 
@@ -128,8 +130,8 @@
             e.stopPropagation();
             noX = e.clientX;
             noY = e.clientY;
-            larguraInicio = obterNumeroSeguro(caixaAvatar.offsetWidth, 120);
-            alturaInicio = obterNumeroSeguro(caixaAvatar.offsetHeight, 120);
+            larguraInicio = obterNumeroSeguro(caixaAvatar.offsetWidth, 150);
+            alturaInicio = obterNumeroSeguro(caixaAvatar.offsetHeight, 150);
         });
 
         document.addEventListener('mousemove', (e) => {
@@ -143,141 +145,46 @@
             } else if (redimensionando) {
                 let novaLargura = larguraInicio + (e.clientX - noX);
                 let novaAltura = alturaInicio + (e.clientY - noY);
-                novaLargura = Math.max(30, novaLargura);
-                novaAltura = Math.max(30, novaAltura);
-
-                caixaAvatar.style.width = novaLargura + 'px';
-                caixaAvatar.style.height = novaAltura + 'px';
-                numLargura.value = novaLargura;
-                numAltura.value = novaAltura;
+                caixaAvatar.style.width = Math.max(30, novaLargura) + 'px';
+                caixaAvatar.style.height = Math.max(30, novaAltura) + 'px';
+                numLargura.value = Math.max(30, novaLargura);
+                numAltura.value = Math.max(30, novaAltura);
             }
         });
 
         document.addEventListener('mouseup', () => { arrastando = false; redimensionando = false; });
 
-        function atualizarCaixaPorInputs() {
-            caixaAvatar.style.width = Math.max(30, obterNumeroSeguro(numLargura.value, 120)) + 'px';
-            caixaAvatar.style.height = Math.max(30, obterNumeroSeguro(numAltura.value, 120)) + 'px';
-        }
-        numLargura.addEventListener('input', atualizarCaixaPorInputs);
-        numAltura.addEventListener('input', atualizarCaixaPorInputs);
-
         async function gerarPdfInterativo() {
-            if (!pdfOriginalBytes) { alert("Por favor, carregue um PDF primeiro!"); return; }
+            if (!pdfOriginalBytes) { alert("Carregue um PDF primeiro!"); return; }
 
             statusTexto.style.color = "#00b37e";
-            statusTexto.innerText = "Injetando código com validação de segurança...";
+            statusTexto.innerText = "Injetando Campo HTML/Rich Text...";
 
             try {
                 const pdfDoc = await PDFLib.PDFDocument.load(pdfOriginalBytes.slice(0));
-                const paginas = pdfDoc.getPages();
-                const primeiraPagina = paginas[0];
+                const primeiraPagina = pdfDoc.getPages()[0];
 
                 const { width: pdfWidthReal, height: pdfHeightReal } = primeiraPagina.getSize();
-                const canvasLarguraVisivel = obterNumeroSeguro(canvas.clientWidth, 1);
-                const canvasAlturaVisivel = obterNumeroSeguro(canvas.clientHeight, 1);
-
-                const fatorX = pdfWidthReal / canvasLarguraVisivel;
-                const fatorY = pdfHeightReal / canvasAlturaVisivel;
+                const fatorX = pdfWidthReal / obterNumeroSeguro(canvas.clientWidth, 1);
+                const fatorY = pdfHeightReal / obterNumeroSeguro(canvas.clientHeight, 1);
 
                 const htmlX = obterNumeroSeguro(caixaAvatar.offsetLeft, 0);
                 const htmlY = obterNumeroSeguro(caixaAvatar.offsetTop, 0);
-                const htmlLargura = obterNumeroSeguro(caixaAvatar.offsetWidth, 120);
-                const htmlAltura = obterNumeroSeguro(caixaAvatar.offsetHeight, 120);
+                const htmlLargura = obterNumeroSeguro(caixaAvatar.offsetWidth, 150);
+                const htmlAltura = obterNumeroSeguro(caixaAvatar.offsetHeight, 150);
 
                 const pdfX = htmlX * fatorX;
-                const pdfY = (canvasAlturaVisivel - (htmlY + htmlAltura)) * fatorY;
+                const pdfY = (obterNumeroSeguro(canvas.clientHeight, 1) - (htmlY + htmlAltura)) * fatorY;
                 const pdfLargura = htmlLargura * fatorX;
                 const pdfAltura = htmlAltura * fatorY;
 
-                const nomeDoCampo = "Campo_Avatar_RPG_" + Math.floor(Math.random() * 10000);
-                const nomeDoCampoLink = nomeDoCampo + "_Link";
+                const nomeDoCampo = "Campo_RichText_" + Math.floor(Math.random() * 10000);
 
-                // 1. O Botão que exibirá o Avatar
-                const annotBotaoDict = pdfDoc.context.obj({
-                    Type: PDFLib.PDFName.of('Annot'),
-                    Subtype: PDFLib.PDFName.of('Widget'),
-                    FT: PDFLib.PDFName.of('Btn'),
-                    Ff: PDFLib.PDFNumber.of(65536), 
-                    T: PDFLib.PDFString.of(nomeDoCampo),
-                    Rect: pdfDoc.context.obj([
-                        PDFLib.PDFNumber.of(pdfX),
-                        PDFLib.PDFNumber.of(pdfY),
-                        PDFLib.PDFNumber.of(pdfX + pdfLargura),
-                        PDFLib.PDFNumber.of(pdfY + pdfAltura)
-                    ])
-                });
+                // Configuração Mágica: Bit 13 (Multiline) + Bit 26 (RichText) = 33558528
+                const FLAG_RICH_TEXT = 33558528;
 
-                // NOVO SCRIPT: Valida se o ambiente possui a função antes de tentar rodar
-                const codigoJSLink = `
-                    var url = event.value;
-                    if (url && url !== "Insira o link da imagem aqui") {
-                        if (typeof util !== 'undefined' && typeof util.iconStreamFromURL === 'function') {
-                            try {
-                                var stream = util.iconStreamFromURL(url);
-                                var campoAvatar = this.getField("${nomeDoCampo}");
-                                campoAvatar.buttonSetIcon(stream);
-                            } catch(e) {
-                                app.alert("Erro no download do stream: " + e.message);
-                            }
-                        } else {
-                            app.alert("Aviso de Compatibilidade:\\n\\nEste navegador (Chrome/Edge/Safari) possui um leitor de PDF simplificado que não aceita renderização de imagens dinâmicas por segurança.\\n\\nPara ver a imagem aparecer aqui, abra este arquivo baixado no Adobe Acrobat Reader.");
-                        }
-                    }
-                `;
-
-                // 2. O Campo de Texto para colar a URL
                 const annotTextoDict = pdfDoc.context.obj({
                     Type: PDFLib.PDFName.of('Annot'),
                     Subtype: PDFLib.PDFName.of('Widget'),
-                    FT: PDFLib.PDFName.of('Tx'),
-                    T: PDFLib.PDFString.of(nomeDoCampoLink),
-                    V: PDFLib.PDFString.of('Insira o link da imagem aqui'),
-                    Rect: pdfDoc.context.obj([
-                        PDFLib.PDFNumber.of(pdfX),
-                        PDFLib.PDFNumber.of(Math.max(0, pdfY - 25)),
-                        PDFLib.PDFNumber.of(pdfX + pdfLargura),
-                        PDFLib.PDFNumber.of(pdfY - 5)
-                    ]),
-                    AA: pdfDoc.context.obj({
-                        K: pdfDoc.context.obj({
-                            S: PDFLib.PDFName.of('JavaScript'),
-                            JS: PDFLib.PDFString.of(codigoJSLink)
-                        })
-                    })
-                });
-
-                const annotBotaoRef = pdfDoc.context.register(annotBotaoDict);
-                const annotTextoRef = pdfDoc.context.register(annotTextoDict);
-
-                let annots = primeiraPagina.node.get(PDFLib.PDFName.of('Annots'));
-                let arrayAnnots;
-                
-                if (!annots) {
-                    arrayAnnots = pdfDoc.context.obj([]);
-                    primeiraPagina.node.set(PDFLib.PDFName.of('Annots'), arrayAnnots);
-                } else {
-                    arrayAnnots = pdfDoc.context.lookup(annots);
-                }
-                
-                arrayAnnots.push(annotBotaoRef);
-                arrayAnnots.push(annotTextoRef);
-
-                const pdfModificadoBytes = await pdfDoc.save();
-                const blob = new Blob([pdfModificadoBytes], { type: "application/pdf" });
-
-                const link = document.createElement('a');
-                link.href = URL.createObjectURL(blob);
-                link.download = `ficha_rpg_validada.pdf`;
-                link.click();
-
-                statusTexto.innerText = "Concluído! PDF defensivo gerado.";
-            } catch (erro) {
-                console.error(erro);
-                statusTexto.style.color = "#ff4757";
-                statusTexto.innerText = "Erro no processamento: " + erro.message;
-            }
-        }
-    </script>
-</body>
-</html>
+                    FT: PDFLib.PDFName.of('Tx'), // Text Field
+                    Ff: PDFLib.PDFNumber.
