@@ -58,7 +58,7 @@
         <div id="statusTexto" class="status" style="color: #00b37e;"></div>
         
         <div class="instrucoes">
-            <strong>Como usar:</strong> Suba a ficha, arraste o quadrado vermelho para onde o "Avatar" deve ficar e clique no botão verde. O PDF baixado terá um campo clicável para o jogador colocar a foto dele quando quiser.
+            <strong>Modo de Teste:</strong> Posicione o campo na ficha e baixe. Para o clique funcionar direto no navegador, o usuário precisará usar a extensão do Adobe Acrobat ativa no Chrome/Edge.
         </div>
     </div>
 
@@ -86,7 +86,6 @@
             return isNaN(numero) ? padrao : numero;
         }
 
-        // --- RENDERIZAÇÃO DO PDF ---
         pdfInput.addEventListener('change', async (e) => {
             const arquivo = e.target.files[0];
             if (!arquivo) return;
@@ -96,7 +95,6 @@
             
             try {
                 pdfOriginalBytes = await arquivo.arrayBuffer();
-                
                 const dadosCarregados = pdfjsLib.getDocument({ data: pdfOriginalBytes.slice(0) });
                 const pdfDocumentoRenderizado = await dadosCarregados.promise;
                 
@@ -119,7 +117,6 @@
             }
         });
 
-        // --- SISTEMA DE ARRASTAR (DRAG & DROP) ---
         let arrastando = false, redimensionando = false;
         let noX = 0, noY = 0, larguraInicio = 0, alturaInicio = 0;
 
@@ -169,12 +166,11 @@
         numLargura.addEventListener('input', atualizarCaixaPorInputs);
         numAltura.addEventListener('input', atualizarCaixaPorInputs);
 
-        // --- GERAÇÃO CIRÚRGICA DO PDF ---
         async function gerarPdfInterativo() {
             if (!pdfOriginalBytes) { alert("Por favor, carregue um PDF primeiro!"); return; }
 
             statusTexto.style.color = "#00b37e";
-            statusTexto.innerText = "Injetando campo interativo de forma segura...";
+            statusTexto.innerText = "Injetando código de imagem...";
 
             try {
                 const pdfDoc = await PDFLib.PDFDocument.load(pdfOriginalBytes.slice(0));
@@ -198,14 +194,11 @@
                 const pdfLargura = htmlLargura * fatorX;
                 const pdfAltura = htmlAltura * fatorY;
 
-                if (isNaN(pdfX) || isNaN(pdfY) || isNaN(pdfLargura) || isNaN(pdfAltura)) {
-                    throw new Error("Falha no cálculo das dimensões espaciais.");
-                }
-
                 const nomeDoCampo = "Campo_Avatar_RPG_" + Math.floor(Math.random() * 10000);
-                const codigoJS = `try { this.importIcon("${nomeDoCampo}"); } catch(e) { app.alert("Para escolher a imagem, abra a ficha no Adobe Acrobat Reader no computador."); }`;
+                
+                // Script nativo do ecossistema PDF do Acrobat
+                const codigoJS = `this.importIcon("${nomeDoCampo}");`;
 
-                // CORREÇÃO: Usamos '.obj([...])' para criar arrays, que é o padrão suportado pelo pdf-lib.
                 const annotDict = pdfDoc.context.obj({
                     Type: PDFLib.PDFName.of('Annot'),
                     Subtype: PDFLib.PDFName.of('Widget'),
@@ -229,7 +222,6 @@
                 let annots = primeiraPagina.node.get(PDFLib.PDFName.of('Annots'));
                 let arrayAnnots;
                 
-                // CORREÇÃO: Mesma lógica aplicada para a lista de anotações
                 if (!annots) {
                     arrayAnnots = pdfDoc.context.obj([]);
                     primeiraPagina.node.set(PDFLib.PDFName.of('Annots'), arrayAnnots);
@@ -243,10 +235,10 @@
 
                 const link = document.createElement('a');
                 link.href = URL.createObjectURL(blob);
-                link.download = `ficha_com_campo_de_foto.pdf`;
+                link.download = `ficha_rpg_campo_imagem.pdf`;
                 link.click();
 
-                statusTexto.innerText = "Sucesso! Ficha baixada com o campo ativo.";
+                statusTexto.innerText = "Concluído! Documento gerado com sucesso.";
             } catch (erro) {
                 console.error(erro);
                 statusTexto.style.color = "#ff4757";
