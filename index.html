@@ -3,136 +3,110 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Laboratório: Campo de Link de Carimbo</title>
+    <title>Injetor de Avatar na Ficha de RPG</title>
     
     <script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
     
     <style>
         body { font-family: 'Segoe UI', Arial, sans-serif; background: #121214; color: #fff; margin: 0; padding: 20px; display: flex; flex-direction: column; align-items: center; }
-        .painel-controle { background: #202024; padding: 20px; border-radius: 8px; width: 100%; max-width: 700px; box-sizing: border-box; margin-bottom: 20px; border: 1px solid #323238; }
-        h2 { margin-top: 0; color: #ff4757; text-align: center; }
-        input[type="file"] { background: #121214; border: 1px solid #41414d; padding: 10px; border-radius: 4px; color: #fff; width: 100%; box-sizing: border-box; margin-bottom: 15px; }
-        button { background: #00b37e; color: #fff; border: none; padding: 12px 20px; font-size: 16px; font-weight: bold; border-radius: 4px; cursor: pointer; width: 100%; transition: 0.2s; }
+        .painel { background: #202024; padding: 30px; border-radius: 8px; width: 100%; max-width: 500px; box-sizing: border-box; border: 1px solid #323238; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
+        h2 { margin-top: 0; color: #00b37e; text-align: center; }
+        .grupo { margin-bottom: 20px; }
+        label { display: block; font-size: 14px; color: #a8a8b3; margin-bottom: 8px; font-weight: bold; }
+        input[type="file"] { background: #121214; border: 1px solid #41414d; padding: 10px; border-radius: 4px; color: #fff; width: 100%; box-sizing: border-box; }
+        button { background: #00b37e; color: #fff; border: none; padding: 15px 20px; font-size: 16px; font-weight: bold; border-radius: 4px; cursor: pointer; width: 100%; transition: 0.2s; }
         button:hover { background: #00875f; }
-        .area-trabalho { position: relative; margin-top: 10px; border: 2px dashed #41414d; background: #202024; display: inline-block; max-width: 100%; }
-        #pdfCanvas { display: block; max-width: 100%; height: auto; }
-        #caixaAvatar { position: absolute; top: 50px; left: 50px; width: 150px; height: 150px; border: 2px dashed #ff4757; background: rgba(255, 71, 87, 0.2); cursor: move; user-select: none; box-sizing: border-box; display: none; }
-        .status { text-align: center; margin-top: 10px; font-weight: bold; color: #00b37e; }
+        .status { text-align: center; margin-top: 15px; font-weight: bold; color: #ff4757; }
+        .nota { font-size: 12px; color: #7c7c8a; text-align: center; margin-top: 10px; }
     </style>
 </head>
 <body>
 
-    <div class="painel-controle">
-        <h2>Laboratório: Anotação de Link Ativo</h2>
-        <input type="file" id="pdfInput" accept=".pdf">
-        <button onclick="gerarPdfLink()">Gerar PDF com Zona de Link</button>
-        <div id="statusTexto" class="status"></div>
-    </div>
+    <div class="painel">
+        <h2>Montador de Ficha com Foto</h2>
+        
+        <div class="grupo">
+            <label>1. Envie a Ficha Limpa (PDF)</label>
+            <input type="file" id="pdfInput" accept=".pdf">
+        </div>
 
-    <div class="area-trabalho">
-        <canvas id="pdfCanvas"></canvas>
-        <div id="caixaAvatar"></div>
+        <div class="grupo">
+            <label>2. Envie a Foto do Personagem (JPG ou PNG)</label>
+            <input type="file" id="imgInput" accept="image/png, image/jpeg">
+        </div>
+
+        <button onclick="mesclarImagemComPdf()">Gerar Ficha Completa</button>
+        <div id="statusTexto" class="status"></div>
+        <div class="nota">O arquivo final será baixado automaticamente com a foto fixada.</div>
     </div>
 
     <script>
-        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
-        let pdfOriginalBytes = null;
+        async function mesclarImagemComPdf() {
+            const pdfInput = document.getElementById('pdfInput').files[0];
+            const imgInput = document.getElementById('imgInput').files[0];
+            const statusTexto = document.getElementById('statusTexto');
 
-        const pdfInput = document.getElementById('pdfInput');
-        const canvas = document.getElementById('pdfCanvas');
-        const caixaAvatar = document.getElementById('caixaAvatar');
-        const statusTexto = document.getElementById('statusTexto');
-
-        pdfInput.addEventListener('change', async (e) => {
-            const arquivo = e.target.files[0];
-            if (!arquivo) return;
-            statusTexto.innerText = "Carregando visualização...";
-            
-            try {
-                pdfOriginalBytes = await arquivo.arrayBuffer();
-                const loadingTask = pdfjsLib.getDocument({ data: new Uint8Array(pdfOriginalBytes) });
-                const pdfDocumento = await loadingTask.promise;
-                const pagina = await pdfDocumento.getPage(1);
-                const viewport = pagina.getViewport({ scale: 1.2 });
-                
-                const contexto = canvas.getContext('2d');
-                canvas.width = viewport.width;
-                canvas.height = viewport.height;
-                
-                await pagina.render({ canvasContext: contexto, viewport: viewport }).promise;
-                caixaAvatar.style.display = "block";
-                statusTexto.innerText = "Posicione a área do link e clique em Gerar.";
-            } catch (erro) {
-                statusTexto.innerText = "Erro: " + erro.message;
+            if (!pdfInput || !imgInput) {
+                statusTexto.innerText = "Por favor, selecione o PDF e a Imagem primeiro!";
+                return;
             }
-        });
 
-        // Arrastar caixa
-        let arrastando = false, noX = 0, noY = 0;
-        caixaAvatar.addEventListener('mousedown', (e) => { arrastando = true; noX = e.clientX - caixaAvatar.offsetLeft; noY = e.clientY - caixaAvatar.offsetTop; });
-        document.addEventListener('mousemove', (e) => {
-            if (!arrastando) return;
-            let x = Math.max(0, Math.min(e.clientX - noX, canvas.clientWidth - caixaAvatar.offsetWidth));
-            let y = Math.max(0, Math.min(e.clientY - noY, canvas.clientHeight - caixaAvatar.offsetHeight));
-            caixaAvatar.style.left = x + 'px';
-            caixaAvatar.style.top = y + 'px';
-        });
-        document.addEventListener('mouseup', () => arrastando = false);
-
-        async function gerarPdfLink() {
-            if (!pdfOriginalBytes) return;
-            statusTexto.innerText = "Injetando anotação de redirecionamento...";
+            statusTexto.style.color = "#00b37e";
+            statusTexto.innerText = "Processando arquivo...";
 
             try {
-                const pdfDoc = await PDFLib.PDFDocument.load(pdfOriginalBytes.slice(0));
-                const primeiraPagina = pdfDoc.getPages()[0];
-                const { width: pdfWidthReal, height: pdfHeightReal } = primeiraPagina.getSize();
+                // 1. Lê os bytes do PDF e da Imagem
+                const pdfBytes = await pdfInput.arrayBuffer();
+                const imgBytes = await imgInput.arrayBuffer();
 
-                const fatorX = pdfWidthReal / canvas.clientWidth;
-                const fatorY = pdfHeightReal / canvas.clientHeight;
+                // 2. Carrega o documento PDF
+                const pdfDoc = await PDFLib.PDFDocument.load(pdfBytes);
+                
+                // 3. Embutir a imagem no PDF (detecta se é JPG ou PNG)
+                let imagemEmbutida;
+                if (imgInput.type === 'image/jpeg') {
+                    imagemEmbutida = await pdfDoc.embedJpg(imgBytes);
+                } else if (imgInput.type === 'image/png') {
+                    imagemEmbutida = await pdfDoc.embedPng(imgBytes);
+                } else {
+                    throw new Error("Formato de imagem não suportado. Use JPG ou PNG.");
+                }
 
-                const pdfX = caixaAvatar.offsetLeft * fatorX;
-                const pdfY = (canvas.clientHeight - (caixaAvatar.offsetTop + caixaAvatar.offsetHeight)) * fatorY;
-                const pdfLargura = caixaAvatar.offsetWidth * fatorX;
-                const pdfAltura = caixaAvatar.offsetHeight * fatorY;
+                // 4. Pega a primeira página do PDF
+                const paginas = pdfDoc.getPages();
+                const primeiraPagina = paginas[0];
 
-                // URL da imagem fixa de teste que o clique vai abrir
-                const urlImagem = "https://t.ctcdn.com.br/JlHwiRHyv0mTD7GfRkIlgO6eQX8=/640x360/smart/i257652.jpeg";
+                // --- CONFIGURAÇÃO DA POSIÇÃO DA IMAGEM ---
+                // Você pode ajustar esses valores baseados nas coordenadas do seu Avatar
+                const larguraDesejada = 150;
+                const alturaDesejada = 150;
+                
+                // Exemplo: desenhando a 50 pixels da borda esquerda e 600 pixels da borda inferior
+                // (O eixo Y no PDF começa de baixo para cima)
+                const posicaoX = 50; 
+                const posicaoY = 600; 
 
-                // Injeta uma anotação de Link nativa (/Link) na área selecionada
-                const annotLinkDict = pdfDoc.context.obj({
-                    Type: PDFLib.PDFName.of('Annot'),
-                    Subtype: PDFLib.PDFName.of('Link'),
-                    Rect: pdfDoc.context.obj([
-                        PDFLib.PDFNumber.of(pdfX),
-                        PDFLib.PDFNumber.of(pdfY),
-                        PDFLib.PDFNumber.of(pdfX + pdfLargura),
-                        PDFLib.PDFNumber.of(pdfY + pdfAltura)
-                    ]),
-                    A: pdfDoc.context.obj({
-                        Type: PDFLib.PDFName.of('Action'),
-                        S: PDFLib.PDFName.of('URI'),
-                        URI: PDFLib.PDFString.of(urlImagem)
-                    }),
-                    Border: pdfDoc.context.obj([PDFLib.PDFNumber.of(0), PDFLib.PDFNumber.of(0), PDFLib.PDFNumber.of(1)]) // Borda fina para teste
+                // 5. Desenha a imagem fundida na página
+                primeiraPagina.drawImage(imagemEmbutida, {
+                    x: posicaoX,
+                    y: posicaoY,
+                    width: larguraDesejada,
+                    height: alturaDesejada,
                 });
 
-                const annotRef = pdfDoc.context.register(annotLinkDict);
-                let annots = primeiraPagina.node.get(PDFLib.PDFName.of('Annots'));
-                let arrayAnnots = annots ? pdfDoc.context.lookup(annots) : pdfDoc.context.obj([]);
-                if (!annots) primeiraPagina.node.set(PDFLib.PDFName.of('Annots'), arrayAnnots);
-                arrayAnnots.push(annotRef);
-
+                // 6. Salva e baixa o novo PDF
                 const pdfModificadoBytes = await pdfDoc.save();
                 const blob = new Blob([pdfModificadoBytes], { type: "application/pdf" });
                 
                 const link = document.createElement('a');
                 link.href = URL.createObjectURL(blob);
-                link.download = `ficha_zona_de_link.pdf`;
+                link.download = `Ficha_com_Avatar.pdf`;
                 link.click();
-                statusTexto.innerText = "PDF baixado! Teste o clique no navegador.";
+
+                statusTexto.innerText = "Sucesso! Ficha gerada com a imagem fundida.";
             } catch (erro) {
+                console.error(erro);
+                statusTexto.style.color = "#ff4757";
                 statusTexto.innerText = "Erro: " + erro.message;
             }
         }
