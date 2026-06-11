@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Ficha RPG - Campo de Link Nativo</title>
+    <title>Montador de Ficha RPG - Imagem em Tempo Real</title>
     
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.12.313/pdf.min.js"></script>
@@ -12,22 +12,35 @@
         body { font-family: 'Segoe UI', Arial, sans-serif; background: #121214; color: #fff; margin: 0; padding: 20px; display: flex; flex-direction: column; align-items: center; }
         .painel-controle { background: #202024; padding: 20px; border-radius: 8px; width: 100%; max-width: 700px; box-sizing: border-box; margin-bottom: 20px; border: 1px solid #323238; }
         h2 { margin-top: 0; color: #00b37e; text-align: center; }
-        input[type="file"] { background: #121214; border: 1px solid #41414d; padding: 10px; border-radius: 4px; color: #fff; width: 100%; box-sizing: border-box; margin-bottom: 15px; }
-        button { background: #00b37e; color: #fff; border: none; padding: 12px 20px; font-size: 16px; font-weight: bold; border-radius: 4px; cursor: pointer; width: 100%; transition: 0.2s; width: 100%; }
+        .grupo-campo { margin-bottom: 15px; }
+        label { display: block; font-size: 14px; color: #a8a8b3; margin-bottom: 8px; font-weight: bold; }
+        input[type="file"] { background: #121214; border: 1px solid #41414d; padding: 10px; border-radius: 4px; color: #fff; width: 100%; box-sizing: border-box; }
+        button { background: #00b37e; color: #fff; border: none; padding: 14px 20px; font-size: 16px; font-weight: bold; border-radius: 4px; cursor: pointer; width: 100%; transition: 0.2s; margin-top: 10px; }
         button:hover { background: #00875f; }
-        .area-trabalho { position: relative; margin-top: 10px; border: 2px dashed #41414d; background: #202024; display: inline-block; max-width: 100%; }
+        .area-trabalho { position: relative; margin-top: 10px; border: 2px dashed #41414d; background: #202024; display: inline-block; max-width: 100%; min-height: 100px; }
         #pdfCanvas { display: block; max-width: 100%; height: auto; }
-        #caixaAvatar { position: absolute; top: 50px; left: 50px; width: 150px; height: 150px; border: 2px dashed #00b37e; background: rgba(0, 179, 126, 0.2); cursor: move; user-select: none; box-sizing: border-box; display: none; z-index: 999; }
-        .status { text-align: center; margin-top: 10px; font-weight: bold; color: #00b37e; font-size: 14px; }
+        #caixaAvatar { position: absolute; top: 50px; left: 50px; width: 140px; height: 140px; border: 2px dashed #00b37e; background: rgba(0, 179, 126, 0.2); cursor: move; user-select: none; box-sizing: border-box; display: none; z-index: 99; }
+        .status { text-align: center; margin-top: 10px; font-weight: bold; color: #ffca28; font-size: 14px; }
     </style>
 </head>
 <body>
 
     <div class="painel-controle">
-        <h2>Ativador de Campo de Link no PDF</h2>
-        <input type="file" id="pdfInput" accept=".pdf">
-        <button onclick="gerarPdfComCampoLink()">Gerar e Baixar PDF Interativo</button>
-        <div id="statusTexto" class="status">Carregue sua ficha limpa para começar.</div>
+        <h2>Montador de Imagem no PDF</h2>
+        
+        <div class="grupo-campo">
+            <label>1. Selecione o modelo do PDF (Ficha Limpa)</label>
+            <input type="file" id="pdfInput" accept=".pdf">
+        </div>
+
+        <div class="grupo-campo">
+            <label>2. Escolha a foto do Personagem (JPG ou PNG)</label>
+            <input type="file" id="imagemInput" accept=".jpg,.jpeg,.png">
+        </div>
+        
+        <button onclick="processarEMontarPdf()">Gerar PDF com a Imagem Escolhida</button>
+        
+        <div id="statusTexto" class="status">Aguardando arquivos...</div>
     </div>
 
     <div class="area-trabalho">
@@ -37,23 +50,28 @@
 
     <script>
         pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.12.313/pdf.worker.min.js';
-        let pdfOriginalBytes = null;
+        
+        let pdfBytesOriginal = null;
+        let imagemBytesEscolhida = null;
+        let tipoImagem = '';
 
         const pdfInput = document.getElementById('pdfInput');
+        const imagemInput = document.getElementById('imagemInput');
         const canvas = document.getElementById('pdfCanvas');
         const caixaAvatar = document.getElementById('caixaAvatar');
         const statusTexto = document.getElementById('statusTexto');
 
+        // Captura e renderiza o PDF de base
         pdfInput.addEventListener('change', async (e) => {
             const arquivo = e.target.files[0];
             if (!arquivo) return;
-            statusTexto.innerText = "Lendo arquivo...";
             
+            statusTexto.innerText = "Carregando esqueleto do PDF...";
             const reader = new FileReader();
             reader.onload = async function() {
-                pdfOriginalBytes = reader.result;
+                pdfBytesOriginal = reader.result;
                 try {
-                    const loadingTask = pdfjsLib.getDocument({ data: new Uint8Array(pdfOriginalBytes) });
+                    const loadingTask = pdfjsLib.getDocument({ data: new Uint8Array(pdfBytesOriginal) });
                     const pdfDocumento = await loadingTask.promise;
                     const pagina = await pdfDocumento.getPage(1);
                     const viewport = pagina.getViewport({ scale: 1.2 });
@@ -64,16 +82,29 @@
                     
                     await pagina.render({ canvasContext: contexto, viewport: viewport }).promise;
                     caixaAvatar.style.display = "block";
-                    statusTexto.innerText = "Posicione o campo verde do Avatar e clique em Gerar.";
+                    statusTexto.innerText = "PDF carregado. Agora escolha a foto do personagem.";
                 } catch (err) {
-                    statusTexto.innerText = "Erro na visualização, mas o download funcionará normalmente.";
-                    canvas.width = 600; canvas.height = 800; caixaAvatar.style.display = "block";
+                    statusTexto.innerText = "Erro ao renderizar tela: " + err.message;
                 }
             };
             reader.readAsArrayBuffer(arquivo);
         });
 
-        // Arrastar caixa
+        // Captura a imagem que o usuário escolheu
+        imagemInput.addEventListener('change', (e) => {
+            const arquivo = e.target.files[0];
+            if (!arquivo) return;
+            
+            tipoImagem = arquivo.type;
+            const reader = new FileReader();
+            reader.onload = function() {
+                imagemBytesEscolhida = reader.result;
+                statusTexto.innerText = "Foto processada! Ajuste o quadrado verde e clique em Gerar.";
+            };
+            reader.readAsArrayBuffer(arquivo);
+        });
+
+        // Arrastar caixa do avatar
         let arrastando = false, noX = 0, noY = 0;
         caixaAvatar.addEventListener('mousedown', (e) => { arrastando = true; noX = e.clientX - caixaAvatar.offsetLeft; noY = e.clientY - caixaAvatar.offsetTop; });
         document.addEventListener('mousemove', (e) => {
@@ -85,65 +116,54 @@
         });
         document.addEventListener('mouseup', () => arrastando = false);
 
-        async function gerarPdfComCampoLink() {
-            if (!pdfOriginalBytes) { alert("Selecione um PDF primeiro!"); return; }
-            statusTexto.innerText = "Injetando campo de entrada nativo...";
+        // Mescla a imagem dentro do PDF nativamente
+        async function processarEMontarPdf() {
+            if (!pdfBytesOriginal) { alert("Selecione o arquivo PDF primeiro!"); return; }
+            if (!imagemBytesEscolhida) { alert("Selecione a foto do personagem!"); return; }
+            
+            statusTexto.innerText = "Mesclando pixels e reconstruindo o PDF...";
 
             try {
-                const pdfDoc = await PDFLib.PDFDocument.load(pdfOriginalBytes.slice(0));
+                const pdfDoc = await PDFLib.PDFDocument.load(pdfBytesOriginal.slice(0));
                 const primeiraPagina = pdfDoc.getPages()[0];
                 const { width: pdfWidthReal, height: pdfHeightReal } = primeiraPagina.getSize();
 
-                const canvasLargura = canvas.clientWidth || 600;
-                const canvasAltura = canvas.clientHeight || 800;
-
-                const fatorX = pdfWidthReal / canvasLargura;
-                const fatorY = pdfHeightReal / canvasAltura;
+                const fatorX = pdfWidthReal / canvas.clientWidth;
+                const fatorY = pdfHeightReal / canvas.clientHeight;
 
                 const pdfX = caixaAvatar.offsetLeft * fatorX;
-                const pdfY = (canvasAltura - (caixaAvatar.offsetTop + caixaAvatar.offsetHeight)) * fatorY;
+                const pdfY = (canvas.clientHeight - (caixaAvatar.offsetTop + caixaAvatar.offsetHeight)) * fatorY;
                 const pdfLargura = caixaAvatar.offsetWidth * fatorX;
                 const pdfAltura = caixaAvatar.offsetHeight * fatorY;
 
-                const nomeDoCampo = "Avatar_Link_Data_" + Math.floor(Math.random() * 10000);
+                // Incorpora a imagem de forma nativa na estrutura binária do PDF
+                let imagemEmbutida;
+                if (tipoImagem === 'image/png') {
+                    imagemEmbutida = await pdfDoc.embedPng(imagemBytesEscolhida);
+                } else {
+                    imagemEmbutida = await pdfDoc.embedJpg(imagemBytesEscolhida);
+                }
 
-                // Injeção de um Campo de Texto (/Tx) focado em receber e armazenar URLs nativamente no Chrome
-                const annotTextoDict = pdfDoc.context.obj({
-                    Type: PDFLib.PDFName.of('Annot'),
-                    Subtype: PDFLib.PDFName.of('Widget'),
-                    FT: PDFLib.PDFName.of('Tx'), // Tipo Texto: Totalmente aceito pelo Chrome
-                    T: PDFLib.PDFString.of(nomeDoCampo),
-                    V: PDFLib.PDFString.of('[Cole o link da imagem aqui]'), // Texto instrucional inicial
-                    Rect: pdfDoc.context.obj([
-                        PDFLib.PDFNumber.of(pdfX),
-                        PDFLib.PDFNumber.of(pdfY),
-                        PDFLib.PDFNumber.of(pdfX + pdfLargura),
-                        PDFLib.PDFNumber.of(pdfY + pdfAltura)
-                    ]),
-                    BS: pdfDoc.context.obj({
-                        W: PDFLib.PDFNumber.of(1),
-                        S: PDFLib.PDFName.of('D') // Borda tracejada discreta
-                    })
+                // Desenha a imagem de forma definitiva no documento
+                primeiraPagina.drawImage(imagemEmbutida, {
+                    x: pdfX,
+                    y: pdfY,
+                    width: pdfLargura,
+                    height: pdfAltura
                 });
-
-                const annotRef = pdfDoc.context.register(annotTextoDict);
-                let annots = primeiraPagina.node.get(PDFLib.PDFName.of('Annots'));
-                let arrayAnnots = annots ? pdfDoc.context.lookup(annots) : pdfDoc.context.obj([]);
-                if (!annots) primeiraPagina.node.set(PDFLib.PDFName.of('Annots'), arrayAnnots);
-                arrayAnnots.push(annotRef);
 
                 const pdfModificadoBytes = await pdfDoc.save();
                 const blob = new Blob([pdfModificadoBytes], { type: "application/pdf" });
                 
                 const link = document.createElement('a');
                 link.href = URL.createObjectURL(blob);
-                link.download = `ficha_com_link_ativo.pdf`;
+                link.download = `ficha_com_avatar_pronto.pdf`;
                 link.click();
                 
-                statusTexto.innerText = "Pronto! Ficha baixada. Abra no navegador e teste o clique.";
+                statusTexto.innerText = "Pronto! Ficha gerada com a imagem visível em qualquer lugar.";
             } catch (erro) {
                 console.error(erro);
-                statusTexto.innerText = "Erro ao gerar: " + erro.message;
+                statusTexto.innerText = "Erro na fusão dos arquivos: " + erro.message;
             }
         }
     </script>
