@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gerador de Campo de Imagem Nativo</title>
+    <title>Injetor de Campo de Imagem - Versão Corrigida</title>
     
     <script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
@@ -12,32 +12,4 @@
         body { font-family: 'Segoe UI', Arial, sans-serif; background: #121214; color: #fff; margin: 0; padding: 20px; display: flex; flex-direction: column; align-items: center; }
         .painel-controle { background: #202024; padding: 20px; border-radius: 8px; width: 100%; max-width: 700px; box-sizing: border-box; margin-bottom: 20px; border: 1px solid #323238; }
         h2 { margin-top: 0; color: #ff4757; text-align: center; }
-        input[type="file"] { background: #121214; border: 1px solid #41414d; padding: 10px; border-radius: 4px; color: #fff; width: 100%; box-sizing: border-box; margin-bottom: 15px; }
-        button { background: #00b37e; color: #fff; border: none; padding: 12px 20px; font-size: 16px; font-weight: bold; border-radius: 4px; cursor: pointer; width: 100%; transition: 0.2s; }
-        button:hover { background: #00875f; }
-        .area-trabalho { position: relative; margin-top: 10px; border: 2px dashed #41414d; background: #202024; display: inline-block; max-width: 100%; }
-        #pdfCanvas { display: block; max-width: 100%; height: auto; }
-        #caixaAvatar { position: absolute; top: 50px; left: 50px; width: 150px; height: 150px; border: 2px dashed #ff4757; background: rgba(255, 71, 87, 0.2); cursor: move; user-select: none; box-sizing: border-box; display: none; }
-        .status { text-align: center; margin-top: 10px; font-weight: bold; color: #00b37e; }
-        .aviso { background: #29292e; padding: 12px; border-radius: 6px; font-size: 13px; color: #ffca28; margin-top: 15px; border-left: 4px solid #ffca28; }
-    </style>
-</head>
-<body>
-
-    <div class="painel-controle">
-        <h2>Injetor de Campo de Imagem Autônomo</h2>
-        <input type="file" id="pdfInput" accept=".pdf">
-        <button onclick="gerarPdfComCampoImagem()">Gerar PDF com Campo de Imagem</button>
-        <div id="statusTexto" class="status"></div>
-        
-        <div class="aviso">
-            <strong>Como testar no Navegador:</strong> Baixe o PDF gerado. Abra-o no Chrome/Edge. Dê um clique duplo na área do avatar criada para acionar a janela de seleção de arquivos do sistema.
-        </div>
-    </div>
-
-    <div class="area-trabalho">
-        <canvas id="pdfCanvas"></canvas>
-        <div id="caixaAvatar"></div>
-    </div>
-
-    <script
+        input[type="file"] { background: #121214; border: 1px solid #41414d; padding: 10px; border-radius: 4px; color: #fff; width: 1
