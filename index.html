@@ -3,13 +3,190 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Injetor de Campo de Imagem - Versão Corrigida</title>
+    <title>Gerador de Campo de Imagem - Corrigido</title>
     
-    <script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.12.313/pdf.min.js"></script>
     
     <style>
         body { font-family: 'Segoe UI', Arial, sans-serif; background: #121214; color: #fff; margin: 0; padding: 20px; display: flex; flex-direction: column; align-items: center; }
         .painel-controle { background: #202024; padding: 20px; border-radius: 8px; width: 100%; max-width: 700px; box-sizing: border-box; margin-bottom: 20px; border: 1px solid #323238; }
         h2 { margin-top: 0; color: #ff4757; text-align: center; }
-        input[type="file"] { background: #121214; border: 1px solid #41414d; padding: 10px; border-radius: 4px; color: #fff; width: 1
+        input[type="file"] { background: #121214; border: 1px solid #41414d; padding: 10px; border-radius: 4px; color: #fff; width: 100%; box-sizing: border-box; margin-bottom: 15px; }
+        button { background: #00b37e; color: #fff; border: none; padding: 12px 20px; font-size: 16px; font-weight: bold; border-radius: 4px; cursor: pointer; width: 100%; transition: 0.2s; margin-bottom: 10px; }
+        button:hover { background: #00875f; }
+        .area-trabalho { position: relative; margin-top: 10px; border: 2px dashed #41414d; background: #202024; display: inline-block; max-width: 100%; min-height: 200px; }
+        #pdfCanvas { display: block; max-width: 100%; height: auto; }
+        #caixaAvatar { position: absolute; top: 50px; left: 50px; width: 150px; height: 150px; border: 2px dashed #ff4757; background: rgba(255, 71, 87, 0.2); cursor: move; user-select: none; box-sizing: border-box; display: none; z-index: 999; }
+        .status { text-align: center; margin-top: 10px; font-weight: bold; color: #00b37e; font-size: 14px; white-space: pre-wrap; }
+    </style>
+</head>
+<body>
+
+    <div class="painel-controle">
+        <h2>Injetor de Campo de Imagem Nativo</h2>
+        <input type="file" id="pdfInput" accept=".pdf">
+        
+        <button onclick="gerarPdfComCampoImagem()">Gerar e Baixar PDF com Campo de Imagem</button>
+        
+        <div id="statusTexto" class="status">Selecione um arquivo PDF para começar.</div>
+    </div>
+
+    <div class="area-trabalho">
+        <canvas id="pdfCanvas"></canvas>
+        <div id="caixaAvatar"></div>
+    </div>
+
+    <script>
+        // Configuração do Worker com versão ultra-estável
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.12.313/pdf.worker.min.js';
+        
+        let pdfOriginalBytes = null;
+
+        const pdfInput = document.getElementById('pdfInput');
+        const canvas = document.getElementById('pdfCanvas');
+        const caixaAvatar = document.getElementById('caixaAvatar');
+        const statusTexto = document.getElementById('statusTexto');
+
+        pdfInput.addEventListener('change', async (e) => {
+            const arquivo = e.target.files[0];
+            if (!arquivo) return;
+            
+            statusTexto.style.color = "#00b37e";
+            statusTexto.innerText = "Lendo bytes do arquivo...";
+            
+            try {
+                const reader = new FileReader();
+                reader.onload = async function() {
+                    pdfOriginalBytes = reader.result;
+                    statusTexto.innerText = "Bytes carregados na memória! Tentando renderizar visualização na tela...";
+                    
+                    try {
+                        const loadingTask = pdfjsLib.getDocument({ data: new Uint8Array(pdfOriginalBytes) });
+                        const pdfDocumento = await loadingTask.promise;
+                        const pagina = await pdfDocumento.getPage(1);
+                        const viewport = pagina.getViewport({ scale: 1.2 });
+                        
+                        const contexto = canvas.getContext('2d');
+                        canvas.width = viewport.width;
+                        canvas.height = viewport.height;
+                        
+                        await pagina.render({ canvasContext: contexto, viewport: viewport }).promise;
+                        
+                        // Configura e exibe o quadrado para posicionamento
+                        caixaAvatar.style.display = "block";
+                        statusTexto.innerText = "Visualização carregada! Posicione o quadrado vermelho e clique no botão acima para baixar.";
+                    } catch (erroVis) {
+                        console.error(erroVis);
+                        statusTexto.style.color = "#ffca28";
+                        statusTexto.innerText = "Aviso: O seu navegador bloqueou a renderização visual da tela.\\nNÃO SE PREOCUPE! Os dados estão salvos. Você pode clicar no botão verde acima para gerar e baixar o seu PDF normalmente.";
+                        
+                        // Força a exibição de uma área simulada caso o canvas falhe, para o botão funcionar com valores padrão
+                        canvas.width = 600;
+                        canvas.height = 800;
+                        caixaAvatar.style.display = "block";
+                    }
+                };
+                reader.readAsArrayBuffer(arquivo);
+            } catch (erroGeral) {
+                statusTexto.style.color = "#ff4757";
+                statusTexto.innerText = "Erro crítico ao ler arquivo: " + erroGeral.message;
+            }
+        });
+
+        // Lógica de arrastar o quadrado vermelho
+        let arrastando = false, noX = 0, noY = 0;
+        caixaAvatar.addEventListener('mousedown', (e) => { arrastando = true; noX = e.clientX - caixaAvatar.offsetLeft; noY = e.clientY - caixaAvatar.offsetTop; });
+        document.addEventListener('mousemove', (e) => {
+            if (!arrastando) return;
+            let x = Math.max(0, Math.min(e.clientX - noX, canvas.clientWidth - caixaAvatar.offsetWidth));
+            let y = Math.max(0, Math.min(e.clientY - noY, canvas.clientHeight - caixaAvatar.offsetHeight));
+            caixaAvatar.style.left = x + 'px';
+            caixaAvatar.style.top = y + 'px';
+        });
+        document.addEventListener('mouseup', () => arrastando = false);
+
+        // Função de processamento binário do PDF
+        async function gerarPdfComCampoImagem() {
+            if (!pdfOriginalBytes) {
+                alert("Por favor, selecione um arquivo PDF primeiro!");
+                return;
+            }
+            
+            statusTexto.style.color = "#00b37e";
+            statusTexto.innerText = "Processando estrutura do formulário...";
+
+            try {
+                // Carrega os bytes diretamente da memória, ignorando completamente se o canvas funcionou ou não
+                const pdfDoc = await PDFLib.PDFDocument.load(pdfOriginalBytes.slice(0));
+                const primeiraPagina = pdfDoc.getPages()[0];
+                const { width: pdfWidthReal, height: pdfHeightReal } = primeiraPagina.getSize();
+
+                // Calcula as proporções baseadas no tamanho visível ou assume padrão seguro se o canvas falhou
+                const canvasLargura = canvas.clientWidth || 600;
+                const canvasAltura = canvas.clientHeight || 800;
+
+                const fatorX = pdfWidthReal / canvasLargura;
+                const fatorY = pdfHeightReal / canvasAltura;
+
+                const pdfX = caixaAvatar.offsetLeft * fatorX;
+                const pdfY = (canvasAltura - (caixaAvatar.offsetTop + caixaAvatar.offsetHeight)) * fatorY;
+                const pdfLargura = caixaAvatar.offsetWidth * fatorX;
+                const pdfAltura = caixaAvatar.offsetHeight * fatorY;
+
+                const nomeDoCampo = "Campo_Imagem_RPG_" + Math.floor(Math.random() * 10000);
+
+                const codigoJSInjecao = `
+                    try {
+                        this.getField("${nomeDoCampo}").buttonImportIcon();
+                    } catch(e) {
+                        app.alert("Este leitor não suporta injeção dinâmica de arquivos.");
+                    }
+                `;
+
+                // Montagem do dicionário estrutural do campo de imagem (/Btn)
+                const annotBotaoDict = pdfDoc.context.obj({
+                    Type: PDFLib.PDFName.of('Annot'),
+                    Subtype: PDFLib.PDFName.of('Widget'),
+                    FT: PDFLib.PDFName.of('Btn'),
+                    Ff: PDFLib.PDFNumber.of(65536), 
+                    T: PDFLib.PDFString.of(nomeDoCampo),
+                    Rect: pdfDoc.context.obj([
+                        PDFLib.PDFNumber.of(pdfX),
+                        PDFLib.PDFNumber.of(pdfY),
+                        PDFLib.PDFNumber.of(pdfX + pdfLargura),
+                        PDFLib.PDFNumber.of(pdfY + pdfAltura)
+                    ]),
+                    AA: pdfDoc.context.obj({
+                        D: pdfDoc.context.obj({
+                            S: PDFLib.PDFName.of('JavaScript'),
+                            JS: PDFLib.PDFString.of(codigoJSInjecao)
+                        })
+                    })
+                });
+
+                const annotRef = pdfDoc.context.register(annotBotaoDict);
+                let annots = primeiraPagina.node.get(PDFLib.PDFName.of('Annots'));
+                let arrayAnnots = annots ? pdfDoc.context.lookup(annots) : pdfDoc.context.obj([]);
+                if (!annots) primeiraPagina.node.set(PDFLib.PDFName.of('Annots'), arrayAnnots);
+                arrayAnnots.push(annotRef);
+
+                const pdfModificadoBytes = await pdfDoc.save();
+                const blob = new Blob([pdfModificadoBytes], { type: "application/pdf" });
+                
+                // Força o download do arquivo diretamente pelo navegador do usuário
+                const link = document.createElement('a');
+                link.href = URL.createObjectURL(blob);
+                link.download = `ficha_campo_imagem_pronta.pdf`;
+                link.click();
+                
+                statusTexto.innerText = "Sucesso! O download do seu PDF modificado começou.";
+            } catch (erro) {
+                console.error(erro);
+                statusTexto.style.color = "#ff4757";
+                statusTexto.innerText = "Erro ao compilar o PDF: " + erro.message;
+            }
+        }
+    </script>
+</body>
+</html>
