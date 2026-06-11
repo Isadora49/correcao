@@ -97,17 +97,17 @@
                 const canvasLargura = canvas.clientWidth || 600;
                 const canvasAltura = canvas.clientHeight || 800;
 
-                const fX = pdfWidthReal / canvasLargura;
-                const fY = pdfHeightReal / canvasAltura;
+                const fatorX = pdfWidthReal / canvasLargura;
+                const fatorY = pdfHeightReal / canvasAltura;
 
-                const pX = caixaAvatar.offsetLeft * fX;
-                const pY = (canvasAltura - (caixaAvatar.offsetTop + caixaAvatar.offsetHeight)) * fY;
-                const pLargura = caixaAvatar.offsetWidth * fX;
-                const pAltura = caixaAvatar.offsetHeight * fY;
+                const pdfX = caixaAvatar.offsetLeft * fatorX;
+                const pdfY = (canvasAltura - (caixaAvatar.offsetTop + caixaAvatar.offsetHeight)) * fatorY;
+                const pdfLargura = caixaAvatar.offsetWidth * fatorX;
+                const pdfAltura = caixaAvatar.offsetHeight * fatorY;
 
                 const nomeDoCampo = "Avatar_Personagem_RPG";
                 
-                // Instrução expandida com escopo de execução global do documento
+                // Sintaxe alternativa para forçar o direcionamento no escopo do interpretador global do documento
                 const codigoJSInjecao = `
                     var f = this.getField("${nomeDoCampo}");
                     if (f !== null) {
@@ -115,6 +115,7 @@
                     }
                 `;
 
+                // Construção com mapeamento explícito do dicionário de formulários interativos (/AcroForm)
                 const annotBotaoDict = pdfDoc.context.obj({
                     Type: PDFLib.PDFName.of('Annot'),
                     Subtype: PDFLib.PDFName.of('Widget'),
@@ -122,16 +123,23 @@
                     Ff: PDFLib.PDFNumber.of(65536), 
                     T: PDFLib.PDFString.of(nomeDoCampo),
                     Rect: pdfDoc.context.obj([
-                        PDFLib.PDFNumber.of(pX),
-                        PDFLib.PDFNumber.of(pY),
-                        PDFLib.PDFNumber.of(pX + pLargura),
-                        PDFLib.PDFNumber.of(pY + pAltura)
+                        PDFLib.PDFNumber.of(pdfX),
+                        PDFLib.PDFNumber.of(pdfY),
+                        PDFLib.PDFNumber.of(pdfX + pdfLargura),
+                        PDFLib.PDFNumber.of(pdfY + pdfAltura)
                     ]),
+                    // Define explicitamente as diretrizes de layout técnico para aceitação de ícones gráficos no botão
                     MK: pdfDoc.context.obj({
-                        TP: PDFLib.PDFNumber.of(1) 
+                        TP: PDFLib.PDFNumber.of(1), // Somente ícone, omitindo strings de texto associadas
+                        I: pdfDoc.context.obj({})   // Inicializa um dicionário vazio para receber referências de fluxo de aparência (/AP)
                     }),
+                    // Mapeia tanto o gatilho "Mouse Down" (D) quanto "Mouse Up" (U) para interceptar o fluxo do evento no navegador
                     AA: pdfDoc.context.obj({
                         D: pdfDoc.context.obj({ 
+                            S: PDFLib.PDFName.of('JavaScript'),
+                            JS: PDFLib.PDFString.of(codigoJSInjecao)
+                        }),
+                        U: pdfDoc.context.obj({
                             S: PDFLib.PDFName.of('JavaScript'),
                             JS: PDFLib.PDFString.of(codigoJSInjecao)
                         })
@@ -139,6 +147,22 @@
                 });
 
                 const annotRef = pdfDoc.context.register(annotBotaoDict);
+                
+                // Registra o campo na árvore global de formulários do documento para validação do motor do visualizador
+                let acroForm = pdfDoc.catalog.get(PDFLib.PDFName.of('AcroForm'));
+                let arrayCampos;
+                if (!acroForm) {
+                    arrayCampos = pdfDoc.context.obj([]);
+                    pdfDoc.catalog.set(PDFLib.PDFName.of('AcroForm'), pdfDoc.context.obj({ Fields: arrayCampos }));
+                } else {
+                    const acroFormDict = pdfDoc.context.lookup(acroForm);
+                    let campos = acroFormDict.get(PDFLib.PDFName.of('Fields'));
+                    arrayCampos = campos ? pdfDoc.context.lookup(campos) : pdfDoc.context.obj([]);
+                    if (!campos) acroFormDict.set(PDFLib.PDFName.of('Fields'), arrayCampos);
+                }
+                arrayCampos.push(annotRef);
+
+                // Anexa o widget visual à página atual do documento
                 let annots = primeiraPagina.node.get(PDFLib.PDFName.of('Annots'));
                 let arrayAnnots = annots ? pdfDoc.context.lookup(annots) : pdfDoc.context.obj([]);
                 if (!annots) primeiraPagina.node.set(PDFLib.PDFName.of('Annots'), arrayAnnots);
