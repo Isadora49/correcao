@@ -3,76 +3,41 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Ficha de RPG Interativa</title>
+    <title>Gerador de Campo de Imagem Nativo</title>
+    
+    <script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
+    
     <style>
-        body { font-family: 'Segoe UI', Arial, sans-serif; background: #121214; color: #fff; padding: 20px; display: flex; flex-direction: column; align-items: center; }
-        .ficha { background: #202024; padding: 30px; border-radius: 8px; width: 100%; max-width: 600px; border: 1px solid #323238; box-sizing: border-box; }
-        h2 { color: #ff4757; text-align: center; margin-top: 0; }
-        .campo-texto { width: 100%; padding: 10px; background: #121214; border: 1px solid #41414d; border-radius: 4px; color: #fff; margin-bottom: 15px; box-sizing: border-box; }
-        
-        /* Área do Avatar */
-        .container-avatar { display: flex; flex-direction: column; align-items: center; margin-bottom: 20px; }
-        .moldura-avatar { width: 150px; height: 150px; border: 2px dashed #ff4757; display: flex; align-items: center; justify-content: center; overflow: hidden; background: #121214; margin-bottom: 10px; }
-        .moldura-avatar img { width: 100%; height: 100%; object-fit: cover; display: none; }
-        .moldura-avatar span { color: #7c7c8a; font-size: 14px; text-align: center; padding: 10px; }
-        
+        body { font-family: 'Segoe UI', Arial, sans-serif; background: #121214; color: #fff; margin: 0; padding: 20px; display: flex; flex-direction: column; align-items: center; }
+        .painel-controle { background: #202024; padding: 20px; border-radius: 8px; width: 100%; max-width: 700px; box-sizing: border-box; margin-bottom: 20px; border: 1px solid #323238; }
+        h2 { margin-top: 0; color: #ff4757; text-align: center; }
+        input[type="file"] { background: #121214; border: 1px solid #41414d; padding: 10px; border-radius: 4px; color: #fff; width: 100%; box-sizing: border-box; margin-bottom: 15px; }
         button { background: #00b37e; color: #fff; border: none; padding: 12px 20px; font-size: 16px; font-weight: bold; border-radius: 4px; cursor: pointer; width: 100%; transition: 0.2s; }
         button:hover { background: #00875f; }
-
-        /* Configuração para quando for gerar o PDF/Imprimir */
-        @media print {
-            body { background: white; color: black; padding: 0; }
-            .ficha { border: none; background: white; width: 100%; max-width: 100%; }
-            .nao-imprimir { display: none; }
-            .campo-texto { border: none; background: transparent; color: black; padding: 0; }
-        }
+        .area-trabalho { position: relative; margin-top: 10px; border: 2px dashed #41414d; background: #202024; display: inline-block; max-width: 100%; }
+        #pdfCanvas { display: block; max-width: 100%; height: auto; }
+        #caixaAvatar { position: absolute; top: 50px; left: 50px; width: 150px; height: 150px; border: 2px dashed #ff4757; background: rgba(255, 71, 87, 0.2); cursor: move; user-select: none; box-sizing: border-box; display: none; }
+        .status { text-align: center; margin-top: 10px; font-weight: bold; color: #00b37e; }
+        .aviso { background: #29292e; padding: 12px; border-radius: 6px; font-size: 13px; color: #ffca28; margin-top: 15px; border-left: 4px solid #ffca28; }
     </style>
 </head>
 <body>
 
-    <div class="ficha">
-        <h2>Ficha de Personagem</h2>
+    <div class="painel-controle">
+        <h2>Injetor de Campo de Imagem Autônomo</h2>
+        <input type="file" id="pdfInput" accept=".pdf">
+        <button onclick="gerarPdfComCampoImagem()">Gerar PDF com Campo de Imagem</button>
+        <div id="statusTexto" class="status"></div>
         
-        <div class="container-avatar">
-            <div class="moldura-avatar" id="moldura">
-                <span id="textoPlaceholder">Cole o link abaixo para ver a foto</span>
-                <img id="fotoAvatar" src="" alt="Avatar">
-            </div>
-            <input type="text" id="inputLink" class="campo-texto nao-imprimir" placeholder="Cole o link da imagem aqui...">
+        <div class="aviso">
+            <strong>Como testar no Navegador:</strong> Baixe o PDF gerado. Abra-o no Chrome/Edge. Dê um clique duplo na área do avatar criada para acionar a janela de seleção de arquivos do sistema.
         </div>
-
-        <label>Nome do Personagem:</label>
-        <input type="text" class="campo-texto" placeholder="Ex: Aratborn">
-
-        <label>Classe / Raça:</label>
-        <input type="text" class="campo-texto" placeholder="Ex: Guerreiro Elfo">
-
-        <button class="nao-imprimir" onclick="salvarComoPdf()">Exportar Ficha em PDF</button>
     </div>
 
-    <script>
-        const inputLink = document.getElementById('inputLink');
-        const fotoAvatar = document.getElementById('fotoAvatar');
-        const textoPlaceholder = document.getElementById('textoPlaceholder');
+    <div class="area-trabalho">
+        <canvas id="pdfCanvas"></canvas>
+        <div id="caixaAvatar"></div>
+    </div>
 
-        // Escuta o link que o usuário colar e atualiza a imagem na hora
-        inputLink.addEventListener('input', () => {
-            const url = inputLink.value.trim();
-            if (url) {
-                fotoAvatar.src = url;
-                fotoAvatar.style.display = 'block';
-                textoPlaceholder.style.display = 'none';
-            } else {
-                fotoAvatar.src = '';
-                fotoAvatar.style.display = 'none';
-                textoPlaceholder.style.display = 'block';
-            }
-        });
-
-        // Função que aciona o motor de PDF do próprio navegador
-        function salvarComoPdf() {
-            window.print();
-        }
-    </script>
-</body>
-</html>
+    <script
