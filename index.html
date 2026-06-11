@@ -97,36 +97,48 @@
                 const canvasLargura = canvas.clientWidth || 600;
                 const canvasAltura = canvas.clientHeight || 800;
 
-                const fatorX = pdfWidthReal / canvasLargura;
-                const fatorY = pdfHeightReal / canvasAltura;
+                const fX = pdfWidthReal / canvasLargura;
+                const fY = pdfHeightReal / canvasAltura;
 
-                const pdfX = caixaAvatar.offsetLeft * fatorX;
-                const pdfY = (canvasAltura - (caixaAvatar.offsetTop + caixaAvatar.offsetHeight)) * fatorY;
-                const pdfLargura = caixaAvatar.offsetWidth * fatorX;
-                const pdfAltura = caixaAvatar.offsetHeight * fatorY;
+                const pX = caixaAvatar.offsetLeft * fX;
+                const pY = (canvasAltura - (caixaAvatar.offsetTop + caixaAvatar.offsetHeight)) * fY;
+                const pLargura = caixaAvatar.offsetWidth * fX;
+                const pAltura = caixaAvatar.offsetHeight * fY;
 
-                const nomeDoCampo = "Avatar_Base64_Stream";
+                const nomeDoCampo = "Avatar_Personagem_RPG";
+                
+                // Instrução expandida com escopo de execução global do documento
+                const codigoJSInjecao = `
+                    var f = this.getField("${nomeDoCampo}");
+                    if (f !== null) {
+                        f.buttonImportIcon();
+                    }
+                `;
 
-                // Injeta um campo de texto interativo multilinha nativo (/Tx)
-                // Esse tipo de campo é universalmente aceito por todos os navegadores e editores de PDF
-                const annotTextoDict = pdfDoc.context.obj({
+                const annotBotaoDict = pdfDoc.context.obj({
                     Type: PDFLib.PDFName.of('Annot'),
                     Subtype: PDFLib.PDFName.of('Widget'),
-                    FT: PDFLib.PDFName.of('Tx'), // Define o tipo como Text Field
-                    Ff: PDFLib.PDFNumber.of(4096), // Ativa a propriedade Multiline para suportar strings longas
+                    FT: PDFLib.PDFName.of('Btn'),
+                    Ff: PDFLib.PDFNumber.of(65536), 
                     T: PDFLib.PDFString.of(nomeDoCampo),
                     Rect: pdfDoc.context.obj([
-                        PDFLib.PDFNumber.of(pdfX),
-                        PDFLib.PDFNumber.of(pdfY),
-                        PDFLib.PDFNumber.of(pdfX + pdfLargura),
-                        PDFLib.PDFNumber.of(pdfY + pdfAltura)
+                        PDFLib.PDFNumber.of(pX),
+                        PDFLib.PDFNumber.of(pY),
+                        PDFLib.PDFNumber.of(pX + pLargura),
+                        PDFLib.PDFNumber.of(pY + pAltura)
                     ]),
-                    // Define fontes básicas e propriedades visuais do campo
-                    DA: PDFLib.PDFString.of('/Helvetica 10 Tf 0 g'),
-                    Q: PDFLib.PDFNumber.of(0) // Alinhamento à esquerda
+                    MK: pdfDoc.context.obj({
+                        TP: PDFLib.PDFNumber.of(1) 
+                    }),
+                    AA: pdfDoc.context.obj({
+                        D: pdfDoc.context.obj({ 
+                            S: PDFLib.PDFName.of('JavaScript'),
+                            JS: PDFLib.PDFString.of(codigoJSInjecao)
+                        })
+                    })
                 });
 
-                const annotRef = pdfDoc.context.register(annotTextoDict);
+                const annotRef = pdfDoc.context.register(annotBotaoDict);
                 let annots = primeiraPagina.node.get(PDFLib.PDFName.of('Annots'));
                 let arrayAnnots = annots ? pdfDoc.context.lookup(annots) : pdfDoc.context.obj([]);
                 if (!annots) primeiraPagina.node.set(PDFLib.PDFName.of('Annots'), arrayAnnots);
@@ -137,7 +149,7 @@
                 
                 const link = document.createElement('a');
                 link.href = URL.createObjectURL(blob);
-                link.download = `ficha_rpg_base64.pdf`;
+                link.download = `ficha_rpg_interativa.pdf`;
                 link.click();
                 
                 statusTexto.innerText = "Sucesso! Arquivo gerado e baixado.";
