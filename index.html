@@ -90,7 +90,19 @@
             statusTexto.innerText = "Injetando propriedades de imagem...";
 
             try {
-                const pdfDoc = await PDFLib.PDFDocument.load(pdfOriginalBytes.slice(0));
+                // Validação defensiva rigorosa para garantir que o escopo global está pronto
+                if (typeof window.PDFLib === 'undefined') {
+                    throw new Error("A biblioteca gráfica ainda não foi totalmente indexada pelo navegador.");
+                }
+                
+                // Desestruturação segura para blindar o código contra erros do tipo 'Cannot read properties of undefined'
+                const { PDFDocument, PDFName, PDFNumber, PDFString } = window.PDFLib;
+                
+                if (!PDFName || !PDFNumber || !PDFString || !PDFDocument) {
+                    throw new Error("Os subcomponentes do dicionário PDFName estão inacessíveis no momento.");
+                }
+
+                const pdfDoc = await PDFDocument.load(pdfOriginalBytes.slice(0));
                 const primeiraPagina = pdfDoc.getPages()[0];
                 const { width: pdfWidthReal, height: pdfHeightReal } = primeiraPagina.getSize();
 
@@ -107,61 +119,60 @@
 
                 const nomeDoCampo = "Avatar_Personagem_RPG";
                 
-                // Chamada direta simplificada para reduzir o overhead do interpretador do navegador
-                const codigoJSInjecao = `this.getField("${nomeDoCampo}").buttonImportIcon();`;
+                // Deixamos a injeção limpa e direta para execução imediata no motor de PDF
+                const codigoJSInjecao = `
+                    var f = this.getField("${nomeDoCampo}");
+                    if (f !== null) {
+                        f.buttonImportIcon();
+                    }
+                `;
 
                 const annotBotaoDict = pdfDoc.context.obj({
-                    Type: PDFLib.PDFName.of('Annot'),
-                    Subtype: PDFLib.PDFName.of('Widget'),
-                    FT: PDFLib.PDFName.of('Btn'),
-                    Ff: PDFLib.PDFNumber.of(65536), 
-                    T: PDFLib.PDFString.of(nomeDoCampo),
+                    Type: PDFName.of('Annot'),
+                    Subtype: PDFName.of('Widget'),
+                    FT: PDFName.of('Btn'),
+                    Ff: PDFNumber.of(65536), 
+                    T: PDFString.of(nomeDoCampo),
                     Rect: pdfDoc.context.obj([
-                        PDFLib.PDFNumber.of(pdfX),
-                        PDFLib.PDFNumber.of(pdfY),
-                        PDFLib.PDFNumber.of(pdfX + pdfLargura),
-                        PDFLib.PDFNumber.of(pdfY + pdfAltura)
+                        PDFNumber.of(pdfX),
+                        PDFNumber.of(pdfY),
+                        PDFNumber.of(pdfX + pdfLargura),
+                        PDFNumber.of(pdfY + pdfAltura)
                     ]),
                     MK: pdfDoc.context.obj({
-                        TP: PDFLib.PDFNumber.of(1), 
+                        TP: PDFNumber.of(1), 
                         I: pdfDoc.context.obj({})   
                     }),
-                    // Duplo gatilho para garantir a captura do clique independente da resposta do motor do navegador
                     AA: pdfDoc.context.obj({
                         D: pdfDoc.context.obj({ 
-                            S: PDFLib.PDFName.of('JavaScript'),
-                            JS: PDFLib.PDFString.of(codigoJSInjecao)
+                            S: PDFName.of('JavaScript'),
+                            JS: PDFString.of(codigoJSInjecao)
                         }),
                         U: pdfDoc.context.obj({
-                            S: PDFLib.PDFName.of('JavaScript'),
-                            JS: PDFLib.PDFString.of(codigoJSInjecao)
+                            S: PDFName.of('JavaScript'),
+                            JS: PDFString.of(codigoJSInjecao)
                         })
                     })
                 });
 
                 const annotRef = pdfDoc.context.register(annotBotaoDict);
                 
-                // Força a criação do formulário com a flag de renderização dinâmica ativada (/NeedAppearances)
-                let acroForm = pdfDoc.catalog.get(PDFLib.PDFName.of('AcroForm'));
+                let acroForm = pdfDoc.catalog.get(PDFName.of('AcroForm'));
                 let arrayCampos;
                 if (!acroForm) {
                     arrayCampos = pdfDoc.context.obj([]);
-                    pdfDoc.catalog.set(PDFLib.PDFName.of('AcroForm'), pdfDoc.context.obj({ 
-                        Fields: arrayCampos,
-                        NeedAppearances: PDFLib.PDFBoolean.of(true)
-                    }));
+                    pdfDoc.catalog.set(PDFName.of('AcroForm'), pdfDoc.context.obj({ Fields: arrayCampos }));
                 } else {
                     const acroFormDict = pdfDoc.context.lookup(acroForm);
-                    acroFormDict.set(PDFLib.PDFName.of('NeedAppearances'), PDFLib.PDFBoolean.of(true));
-                    let campos = acroFormDict.get(PDFLib.PDFName.of('Fields'));
+                    let campos = acroFormDict.get(PDFName.of('Fields'));
                     arrayCampos = campos ? pdfDoc.context.lookup(campos) : pdfDoc.context.obj([]);
-                    if (!campos) acroFormDict.set(PDFLib.PDFName.of('Fields'), arrayCampos);
+                    if (!campos) acroFormDict.set(PDFName.of('Fields'), arrayCampos);
                 }
                 arrayCampos.push(annotRef);
 
-                let annots = primeiraPagina.node.get(PDFLib.PDFName.of('Annots'));
+                let annots = primeiraPagina.node.get(PDFName.of('Annots'));
                 let arrayAnnots = annots ? pdfDoc.context.lookup(annots) : pdfDoc.context.obj([]);
-                if (!annots) primeiraPagina.node.set(PDFLib.PDFName.of('Annots'), arrayAnnots);
+                if (!annots) primeiraPagina.node.set(PDFName.of('Annots'), arrayAnnots);
                 arrayAnnots.push(annotRef);
 
                 const pdfModificadoBytes = await pdfDoc.save();
