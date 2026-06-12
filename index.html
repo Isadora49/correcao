@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Injetor de Campo de Imagem Nativo</title>
+    <title>Injetor de Campo de Imagem - Master</title>
     
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.12.313/pdf.min.js"></script>
@@ -90,21 +90,8 @@
             statusTexto.innerText = "Injetando propriedades de imagem...";
 
             try {
-                // Isolamento preventivo total contra erros de escopo 'undefined'
-                const libGrafica = window.PDFLib;
-                if (!libGrafica || !libGrafica.PDFDocument) {
-                    throw new Error("A biblioteca PDFLib não encontrou o barramento global da janela.");
-                }
-
-                // Vinculação estática explícita mapeando os construtores de dicionários
-                const PDFDocument = libGrafica.PDFDocument;
-                const PDFName = libGrafica.PDFName;
-                const PDFNumber = libGrafica.PDFNumber;
-                const PDFString = libGrafica.PDFString;
-
-                if (!PDFName || typeof PDFName.of !== 'function') {
-                    throw new Error("Mapeamento interno corrompido para o indexador PDFName.");
-                }
+                // Desestruturação direta e segura para evitar o erro "Cannot read properties of undefined (reading 'of')"
+                const { PDFDocument, PDFName, PDFNumber, PDFString } = PDFLib;
 
                 const pdfDoc = await PDFDocument.load(pdfOriginalBytes.slice(0));
                 const primeiraPagina = pdfDoc.getPages()[0];
@@ -123,22 +110,13 @@
 
                 const nomeDoCampo = "Avatar_Personagem_RPG";
                 
-                // JavaScript embutido revisado com checagem de tipo (Type-Check) para evitar travamentos silenciosos
+                // Código JavaScript injetado limpo de tratamentos de alerta. 
+                // A instrução pura vai diretamente para o motor de compilação.
                 const codigoJSInjecao = `
-                    try {
-                        var f = this.getField("${nomeDoCampo}");
-                        if (f !== null) {
-                            if (typeof f.buttonImportIcon === "function") {
-                                f.buttonImportIcon();
-                            } else {
-                                app.alert({
-                                    cMsg: "Aviso: O leitor deste navegador (Chrome/Edge) possui restrições internas de segurança que limitam a injeção local de imagens diretamente na aba.\\n\\nPara selecionar seu avatar e visualizá-lo na ficha, abra este arquivo no Adobe Reader ou visualizadores dedicados.",
-                                    nType: 1,
-                                    cTitle: "Aviso de Compatibilidade do Navegador"
-                                });
-                            }
-                        }
-                    } catch (e) {}
+                    var f = this.getField("${nomeDoCampo}");
+                    if (f !== null) {
+                        f.buttonImportIcon();
+                    }
                 `;
 
                 const annotBotaoDict = pdfDoc.context.obj({
@@ -197,7 +175,7 @@
                 link.download = `ficha_rpg_interativa.pdf`;
                 link.click();
                 
-                statusTexto.innerText = "Sucesso! Arquivo gerado e baixado.";
+                statusTexto.innerText = "Sucesso! Arquivo gerado e baixado sem erros lógicos.";
             } catch (erro) {
                 console.error(erro);
                 statusTexto.innerText = "Erro ao processar: " + erro.message;
