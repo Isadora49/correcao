@@ -64,7 +64,7 @@
                     await pagina.render({ canvasContext: contexto, viewport: viewport }).promise;
                     
                     caixaAvatar.style.display = "block";
-                    statusTexto.innerText = "Posicione the campo do Avatar e clique em Gerar e Baixar PDF.";
+                    statusTexto.innerText = "Posicione o campo do Avatar e clique em Gerar e Baixar PDF.";
                 } catch (err) {
                     canvas.width = 600; canvas.height = 800;
                     caixaAvatar.style.display = "block";
@@ -87,7 +87,7 @@
 
         async function gerarPdfComCampoImagem() {
             if (!pdfOriginalBytes) return;
-            statusTexto.innerText = "Injetando propriedades de imagem...";
+            statusTexto.innerText = "Injetando propriedades de imagem compatíveis...";
 
             try {
                 const { PDFDocument, PDFName, PDFNumber, PDFString } = PDFLib;
@@ -108,43 +108,36 @@
                 const pdfAltura = caixaAvatar.offsetHeight * fatorY;
 
                 const nomeDoCampo = "Avatar_Personagem_RPG";
-                
-                const codigoJSInjecao = `
-                    var f = this.getField("${nomeDoCampo}");
-                    if (f !== null) {
-                        f.buttonImportIcon();
-                    }
-                `;
 
-                const annotBotaoDict = pdfDoc.context.obj({
+                // Criamos um Form XObject básico para definir a área de renderização visual
+                const xObjectAparencia = pdfDoc.context.obj({
+                    Type: PDFName.of('XObject'),
+                    Subtype: PDFName.of('Form'),
+                    BBox: pdfDoc.context.obj([PDFNumber.of(0), PDFNumber.of(0), PDFNumber.of(pdfLargura), PDFNumber.of(pdfAltura)]),
+                    Resources: pdfDoc.context.obj({})
+                });
+                const xObjectRef = pdfDoc.context.register(xObjectAparencia);
+
+                // Dicionário mapeado como tipo /Sig (Assinatura Gráfica Interativa)
+                // Os navegadores interpretam este tipo abrindo o prompt nativo do sistema operacional.
+                const annotSignDict = pdfDoc.context.obj({
                     Type: PDFName.of('Annot'),
                     Subtype: PDFName.of('Widget'),
-                    FT: PDFName.of('Btn'),
-                    Ff: PDFNumber.of(65536), 
+                    FT: PDFName.of('Sig'), 
                     T: PDFString.of(nomeDoCampo),
+                    F: PDFNumber.of(4), // Flag "Print" ativa para garantir visibilidade
                     Rect: pdfDoc.context.obj([
                         PDFNumber.of(pdfX),
                         PDFNumber.of(pdfY),
                         PDFNumber.of(pdfX + pdfLargura),
                         PDFNumber.of(pdfY + pdfAltura)
                     ]),
-                    MK: pdfDoc.context.obj({
-                        TP: PDFNumber.of(1), 
-                        I: pdfDoc.context.obj({})   
-                    }),
-                    AA: pdfDoc.context.obj({
-                        D: pdfDoc.context.obj({ 
-                            S: PDFName.of('JavaScript'),
-                            JS: PDFString.of(codigoJSInjecao)
-                        }),
-                        U: pdfDoc.context.obj({
-                            S: PDFName.of('JavaScript'),
-                            JS: PDFString.of(codigoJSInjecao)
-                        })
+                    AP: pdfDoc.context.obj({
+                        N: xObjectRef // Amarra o fluxo de aparência normal ao objeto gráfico
                     })
                 });
 
-                const annotRef = pdfDoc.context.register(annotBotaoDict);
+                const annotRef = pdfDoc.context.register(annotSignDict);
                 
                 let acroForm = pdfDoc.catalog.get(PDFName.of('AcroForm'));
                 let arrayCampos;
@@ -172,7 +165,7 @@
                 link.download = `ficha_rpg_interativa.pdf`;
                 link.click();
                 
-                statusTexto.innerText = "Sucesso! Arquivo gerado e baixado sem erros lógicos.";
+                statusTexto.innerText = "Sucesso! Campo injetado. Teste o arquivo baixado diretamente no Chrome ou Edge.";
             } catch (erro) {
                 console.error(erro);
                 statusTexto.innerText = "Erro ao processar: " + erro.message;
