@@ -64,7 +64,7 @@
                     await pagina.render({ canvasContext: contexto, viewport: viewport }).promise;
                     
                     caixaAvatar.style.display = "block";
-                    statusTexto.innerText = "Posicione o campo do Avatar e clique em Gerar e Baixar PDF.";
+                    statusTexto.innerText = "Posicione the campo do Avatar e clique em Gerar e Baixar PDF.";
                 } catch (err) {
                     canvas.width = 600; canvas.height = 800;
                     caixaAvatar.style.display = "block";
@@ -90,7 +90,6 @@
             statusTexto.innerText = "Injetando propriedades de imagem...";
 
             try {
-                // Desestruturação direta e segura para evitar o erro "Cannot read properties of undefined (reading 'of')"
                 const { PDFDocument, PDFName, PDFNumber, PDFString } = PDFLib;
 
                 const pdfDoc = await PDFDocument.load(pdfOriginalBytes.slice(0));
@@ -110,8 +109,6 @@
 
                 const nomeDoCampo = "Avatar_Personagem_RPG";
                 
-                // Código JavaScript injetado limpo de tratamentos de alerta. 
-                // A instrução pura vai diretamente para o motor de compilação.
                 const codigoJSInjecao = `
                     var f = this.getField("${nomeDoCampo}");
                     if (f !== null) {
