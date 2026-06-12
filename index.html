@@ -107,15 +107,22 @@
 
                 const nomeDoCampo = "Avatar_Personagem_RPG";
                 
-                // Sintaxe alternativa para forçar o direcionamento no escopo do interpretador global do documento
+                // Código Acrobat JavaScript com tratamento de exceção nativo encapsulado
                 const codigoJSInjecao = `
-                    var f = this.getField("${nomeDoCampo}");
-                    if (f !== null) {
-                        f.buttonImportIcon();
+                    try {
+                        var f = this.getField("${nomeDoCampo}");
+                        if (f !== null) {
+                            f.buttonImportIcon();
+                        }
+                    } catch (erro) {
+                        app.alert({
+                            cMsg: "O motor deste leitor de PDF bloqueou a abertura da janela de arquivos por diretivas de segurança. Use o Adobe Reader para suporte completo.",
+                            nType: 1,
+                            cTitle: "Segurança de Execução"
+                        });
                     }
                 `;
 
-                // Construção com mapeamento explícito do dicionário de formulários interativos (/AcroForm)
                 const annotBotaoDict = pdfDoc.context.obj({
                     Type: PDFLib.PDFName.of('Annot'),
                     Subtype: PDFLib.PDFName.of('Widget'),
@@ -128,12 +135,10 @@
                         PDFLib.PDFNumber.of(pdfX + pdfLargura),
                         PDFLib.PDFNumber.of(pdfY + pdfAltura)
                     ]),
-                    // Define explicitamente as diretrizes de layout técnico para aceitação de ícones gráficos no botão
                     MK: pdfDoc.context.obj({
-                        TP: PDFLib.PDFNumber.of(1), // Somente ícone, omitindo strings de texto associadas
-                        I: pdfDoc.context.obj({})   // Inicializa um dicionário vazio para receber referências de fluxo de aparência (/AP)
+                        TP: PDFLib.PDFNumber.of(1), 
+                        I: pdfDoc.context.obj({})   
                     }),
-                    // Mapeia tanto o gatilho "Mouse Down" (D) quanto "Mouse Up" (U) para interceptar o fluxo do evento no navegador
                     AA: pdfDoc.context.obj({
                         D: pdfDoc.context.obj({ 
                             S: PDFLib.PDFName.of('JavaScript'),
@@ -148,7 +153,6 @@
 
                 const annotRef = pdfDoc.context.register(annotBotaoDict);
                 
-                // Registra o campo na árvore global de formulários do documento para validação do motor do visualizador
                 let acroForm = pdfDoc.catalog.get(PDFLib.PDFName.of('AcroForm'));
                 let arrayCampos;
                 if (!acroForm) {
@@ -162,7 +166,6 @@
                 }
                 arrayCampos.push(annotRef);
 
-                // Anexa o widget visual à página atual do documento
                 let annots = primeiraPagina.node.get(PDFLib.PDFName.of('Annots'));
                 let arrayAnnots = annots ? pdfDoc.context.lookup(annots) : pdfDoc.context.obj([]);
                 if (!annots) primeiraPagina.node.set(PDFLib.PDFName.of('Annots'), arrayAnnots);
