@@ -90,16 +90,20 @@
             statusTexto.innerText = "Injetando propriedades de imagem...";
 
             try {
-                // Validação defensiva rigorosa para garantir que o escopo global está pronto
-                if (typeof window.PDFLib === 'undefined') {
-                    throw new Error("A biblioteca gráfica ainda não foi totalmente indexada pelo navegador.");
+                // Isolamento preventivo total contra erros de escopo 'undefined'
+                const libGrafica = window.PDFLib;
+                if (!libGrafica || !libGrafica.PDFDocument) {
+                    throw new Error("A biblioteca PDFLib não encontrou o barramento global da janela.");
                 }
-                
-                // Desestruturação segura para blindar o código contra erros do tipo 'Cannot read properties of undefined'
-                const { PDFDocument, PDFName, PDFNumber, PDFString } = window.PDFLib;
-                
-                if (!PDFName || !PDFNumber || !PDFString || !PDFDocument) {
-                    throw new Error("Os subcomponentes do dicionário PDFName estão inacessíveis no momento.");
+
+                // Vinculação estática explícita mapeando os construtores de dicionários
+                const PDFDocument = libGrafica.PDFDocument;
+                const PDFName = libGrafica.PDFName;
+                const PDFNumber = libGrafica.PDFNumber;
+                const PDFString = libGrafica.PDFString;
+
+                if (!PDFName || typeof PDFName.of !== 'function') {
+                    throw new Error("Mapeamento interno corrompido para o indexador PDFName.");
                 }
 
                 const pdfDoc = await PDFDocument.load(pdfOriginalBytes.slice(0));
@@ -119,12 +123,22 @@
 
                 const nomeDoCampo = "Avatar_Personagem_RPG";
                 
-                // Deixamos a injeção limpa e direta para execução imediata no motor de PDF
+                // JavaScript embutido revisado com checagem de tipo (Type-Check) para evitar travamentos silenciosos
                 const codigoJSInjecao = `
-                    var f = this.getField("${nomeDoCampo}");
-                    if (f !== null) {
-                        f.buttonImportIcon();
-                    }
+                    try {
+                        var f = this.getField("${nomeDoCampo}");
+                        if (f !== null) {
+                            if (typeof f.buttonImportIcon === "function") {
+                                f.buttonImportIcon();
+                            } else {
+                                app.alert({
+                                    cMsg: "Aviso: O leitor deste navegador (Chrome/Edge) possui restrições internas de segurança que limitam a injeção local de imagens diretamente na aba.\\n\\nPara selecionar seu avatar e visualizá-lo na ficha, abra este arquivo no Adobe Reader ou visualizadores dedicados.",
+                                    nType: 1,
+                                    cTitle: "Aviso de Compatibilidade do Navegador"
+                                });
+                            }
+                        }
+                    } catch (e) {}
                 `;
 
                 const annotBotaoDict = pdfDoc.context.obj({
