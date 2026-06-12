@@ -87,10 +87,10 @@
 
         async function gerarPdfComCampoImagem() {
             if (!pdfOriginalBytes) return;
-            statusTexto.innerText = "Injetando propriedades de imagem compatíveis...";
+            statusTexto.innerText = "Gerando campo de formulário padronizado...";
 
             try {
-                const { PDFDocument, PDFName, PDFNumber, PDFString } = PDFLib;
+                const { PDFDocument, PDFName, PDFString } = PDFLib;
 
                 const pdfDoc = await PDFDocument.load(pdfOriginalBytes.slice(0));
                 const primeiraPagina = pdfDoc.getPages()[0];
@@ -109,53 +109,43 @@
 
                 const nomeDoCampo = "Avatar_Personagem_RPG";
 
-                // Criamos um Form XObject básico para definir a área de renderização visual
-                const xObjectAparencia = pdfDoc.context.obj({
-                    Type: PDFName.of('XObject'),
-                    Subtype: PDFName.of('Form'),
-                    BBox: pdfDoc.context.obj([PDFNumber.of(0), PDFNumber.of(0), PDFNumber.of(pdfLargura), PDFNumber.of(pdfAltura)]),
-                    Resources: pdfDoc.context.obj({})
-                });
-                const xObjectRef = pdfDoc.context.register(xObjectAparencia);
-
-                // Dicionário mapeado como tipo /Sig (Assinatura Gráfica Interativa)
-                // Os navegadores interpretam este tipo abrindo o prompt nativo do sistema operacional.
-                const annotSignDict = pdfDoc.context.obj({
-                    Type: PDFName.of('Annot'),
-                    Subtype: PDFName.of('Widget'),
-                    FT: PDFName.of('Sig'), 
-                    T: PDFString.of(nomeDoCampo),
-                    F: PDFNumber.of(4), // Flag "Print" ativa para garantir visibilidade
-                    Rect: pdfDoc.context.obj([
-                        PDFNumber.of(pdfX),
-                        PDFNumber.of(pdfY),
-                        PDFNumber.of(pdfX + pdfLargura),
-                        PDFNumber.of(pdfY + pdfAltura)
-                    ]),
-                    AP: pdfDoc.context.obj({
-                        N: xObjectRef // Amarra o fluxo de aparência normal ao objeto gráfico
-                    })
-                });
-
-                const annotRef = pdfDoc.context.register(annotSignDict);
+                // Utiliza a API oficial de AcroForm do pdf-lib para criar o botão de forma limpa
+                const form = pdfDoc.getForm();
                 
-                let acroForm = pdfDoc.catalog.get(PDFName.of('AcroForm'));
-                let arrayCampos;
-                if (!acroForm) {
-                    arrayCampos = pdfDoc.context.obj([]);
-                    pdfDoc.catalog.set(PDFName.of('AcroForm'), pdfDoc.context.obj({ Fields: arrayCampos }));
-                } else {
-                    const acroFormDict = pdfDoc.context.lookup(acroForm);
-                    let campos = acroFormDict.get(PDFName.of('Fields'));
-                    arrayCampos = campos ? pdfDoc.context.lookup(campos) : pdfDoc.context.obj([]);
-                    if (!campos) acroFormDict.set(PDFName.of('Fields'), arrayCampos);
-                }
-                arrayCampos.push(annotRef);
+                // Remove o campo se ele já existir para evitar duplicidade estrutural
+                try { form.removeField(nomeDoCampo); } catch(e) {}
 
-                let annots = primeiraPagina.node.get(PDFName.of('Annots'));
-                let arrayAnnots = annots ? pdfDoc.context.lookup(annots) : pdfDoc.context.obj([]);
-                if (!annots) primeiraPagina.node.set(PDFName.of('Annots'), arrayAnnots);
-                arrayAnnots.push(annotRef);
+                const botaoImagem = form.createButton(nomeDoCampo);
+                botaoImagem.addToPage(primeiraPagina, {
+                    x: pdfX,
+                    y: pdfY,
+                    width: pdfLargura,
+                    height: pdfAltura
+                });
+                
+                // Define o rótulo visual que aparecerá renderizado em TODOS os navegadores e leitores
+                botaoImagem.setLabel("Clique para Inserir Imagem");
+
+                // Injeta o script de importação de ícone diretamente na ação de MouseUp (U) do widget nativo
+                const campoRef = botaoImagem.acroField.ref;
+                const campoDict = pdfDoc.context.lookup(campoRef);
+                
+                const codigoJSInjecao = `
+                    var f = this.getField("${nomeDoCampo}");
+                    if (f !== null) {
+                        f.buttonImportIcon();
+                    }
+                `;
+
+                campoDict.set(
+                    PDFName.of('AA'),
+                    pdfDoc.context.obj({
+                        U: pdfDoc.context.obj({
+                            S: PDFName.of('JavaScript'),
+                            JS: PDFString.of(codigoJSInjecao)
+                        })
+                    })
+                );
 
                 const pdfModificadoBytes = await pdfDoc.save();
                 const blob = new Blob([pdfModificadoBytes], { type: "application/pdf" });
@@ -165,7 +155,7 @@
                 link.download = `ficha_rpg_interativa.pdf`;
                 link.click();
                 
-                statusTexto.innerText = "Sucesso! Campo injetado. Teste o arquivo baixado diretamente no Chrome ou Edge.";
+                statusTexto.innerText = "Sucesso! Baixado com árvore de formulário limpa.";
             } catch (erro) {
                 console.error(erro);
                 statusTexto.innerText = "Erro ao processar: " + erro.message;
